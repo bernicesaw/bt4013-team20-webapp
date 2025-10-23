@@ -3,6 +3,9 @@
 *.py[codz]
 *$py.class
 
+# data files
+**/.DS_Store
+
 # C extensions
 *.so
 
