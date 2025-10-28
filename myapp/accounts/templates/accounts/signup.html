@@ -4,6 +4,10 @@
 {% block title %}Sign up{% endblock %}
 
 {% block extra_js %}
+  <script>
+    // currency options injected from server (single source of truth)
+    window.CURRENCY_OPTIONS = {{ currency_json|safe }};
+  </script>
   <script src="{% static 'accounts/signup.js' %}"></script>
 {% endblock %}
 
@@ -60,8 +64,8 @@
               {{ form.median_salary }}
             </div>
             <div class="col-md-4 mb-3">
-              <label for="{{ form.currency.id_for_label }}">{{ form.currency.label }}</label>
-              {{ form.currency }}
+                <label for="{{ form.currency.id_for_label }}">{{ form.currency.label }} {% if form.currency.field.required %}<span class="text-danger">*</span>{% endif %}</label>
+                {{ form.currency }}
             </div>
           </div>
 

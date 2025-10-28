@@ -45,7 +45,9 @@ class SignupForm(forms.Form):
     skills = forms.CharField(required=True, help_text='Comma-separated skills (add up to five)')
 
     median_salary = forms.DecimalField(max_digits=12, decimal_places=2, label='Monthly Median Salary', widget=forms.NumberInput(attrs={'class': 'form-control'}))
-    currency = forms.ChoiceField(choices=CURRENCY_CHOICES, label='Currency', widget=forms.Select(attrs={'class': 'form-select'}))
+    # prepend a placeholder option for the currency select so the dropdown shows "Select currency"
+    CURRENCY_CHOICES_WITH_PLACEHOLDER = [('', 'Select currency')] + CURRENCY_CHOICES
+    currency = forms.ChoiceField(choices=CURRENCY_CHOICES_WITH_PLACEHOLDER, label='Currency', widget=forms.Select(attrs={'class': 'form-select'}))
 
     # We'll accept working experience as JSON string from the client
     work_experiences = forms.CharField(required=False, help_text='JSON array of experiences')
@@ -128,6 +130,14 @@ class SignupForm(forms.Form):
                 raise ValidationError(f"Work experience #{idx+1} missing job_title.")
             if exp.get('median_salary') in (None, ''):
                 raise ValidationError(f"Work experience #{idx+1} missing median_salary.")
+            # ensure median_salary is numeric and non-negative
+            val = exp.get('median_salary')
+            try:
+                num = float(val)
+            except Exception:
+                raise ValidationError(f"Work experience #{idx+1} has an invalid median_salary. Please enter a number.")
+            if num < 0:
+                raise ValidationError(f"Work experience #{idx+1} has a negative median_salary. Please enter a non-negative number.")
             if not exp.get('skills'):
                 raise ValidationError(f"Work experience #{idx+1} missing skills.")
         return arr

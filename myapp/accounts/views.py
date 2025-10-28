@@ -13,7 +13,8 @@ except Exception:
     pass
 
 from .forms import SignupForm, JOB_TITLE_CHOICES
-from .models import Profile, WorkExperience
+from .models import Profile, WorkExperience, CURRENCY_CHOICES
+import json
 
 from supabase import create_client, Client
 
@@ -104,18 +105,18 @@ def signup_view(request):
                     # do not block signup on Supabase failure, but notify admin/log
                     print("Supabase insert failed:", e, file=sys.stderr)
 
-                # log user in
-                user = authenticate(request, username=email, password=password)
-                if user:
-                    auth_login(request, user)
-                messages.success(request, "Account created and logged in.")
-                return redirect('dashboard:dashboard_view')  # change redirect as appropriate
+                # After creating the account and mirroring to Supabase, show a success page.
+                # We do not auto-login here so the user can explicitly log in via the login page.
+                return redirect('accounts:signup_success')
     else:
         form = SignupForm()
     # prepare job titles for client-side datalist (sorted alphabetically)
     # JOB_TITLE_CHOICES is a list of labels
     job_titles = sorted(JOB_TITLE_CHOICES)
-    return render(request, 'accounts/signup.html', {'form': form, 'job_titles': job_titles})
+    # expose currency codes to template as JSON for client-side selects
+    currency_list = [code for code, _ in CURRENCY_CHOICES]
+    currency_json = json.dumps(currency_list)
+    return render(request, 'accounts/signup.html', {'form': form, 'job_titles': job_titles, 'currency_json': currency_json})
 
 
 from django.contrib.auth.views import LoginView
@@ -140,3 +141,8 @@ def logout_view(request):
         # ignore logout errors
         pass
     return redirect('accounts:login')
+
+
+def signup_success_view(request):
+    """Render a simple signup success/thank-you page with a button linking to the login page."""
+    return render(request, 'accounts/signup_success.html')

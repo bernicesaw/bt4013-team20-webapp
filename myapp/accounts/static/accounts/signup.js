@@ -7,7 +7,13 @@ function formatCurrencyInput(el) {
   if (v === '') return;
   let num = parseFloat(v);
   if (isNaN(num)) return;
-  el.value = num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  // If the input is a number input, avoid inserting commas (which break number inputs).
+  // Use a plain numeric string with two decimals so the user can continue editing large numbers.
+  if (el.type === 'number') {
+    el.value = num.toFixed(2);
+  } else {
+    el.value = num.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  }
 }
 
 function initSignupForm() {
@@ -139,6 +145,8 @@ function initSignupForm() {
         expSkillsList.appendChild(span);
       });
       expSkillsHidden.value = expSkillsArr.join(', ');
+      // clear any previous validation state for this experience skills input
+      try { clearFieldError(expSkillsInput); } catch (e) {}
     }
 
     function renderExpSkillSuggestions(q) {
@@ -157,17 +165,44 @@ function initSignupForm() {
     expSkillsInput.addEventListener('input', (e)=> renderExpSkillSuggestions(e.target.value));
     expSkillsInput.addEventListener('keydown', (e)=> { if (e.key === 'Enter') { e.preventDefault(); const v=expSkillsInput.value.trim(); if(v && expSkillsArr.length<5 && !expSkillsArr.includes(v)){ expSkillsArr.push(v); expSkillsInput.value=''; renderExpSkills(); } } });
 
-  const salary = document.createElement('input');
+    const salary = document.createElement('input');
+  // Use number input so mobile keyboards show numeric by default, but avoid comma formatting
+  salary.type = 'number';
+  salary.inputMode = 'decimal';
   salary.placeholder = 'Monthly Median Salary';
     salary.className = 'form-control me-2';
     salary.style.maxWidth = '260px';
+  // accept two decimals and disallow negatives
+  salary.setAttribute('step', '0.01');
+  salary.setAttribute('min', '0');
   salary.required = true;
+
+    // Prevent negative input on the client as the user types (strip minus signs)
+    salary.addEventListener('input', () => {
+      try {
+        if (salary.value && salary.value.toString().startsWith('-')) {
+          // remove all minus signs
+          salary.value = salary.value.toString().replace(/-/g, '');
+        }
+      } catch (e) { /* noop */ }
+    });
 
     const currency = document.createElement('select');
     currency.className = 'form-select w-auto';
-    ['USD','SGD','EUR','GBP'].forEach(c => { const o = document.createElement('option'); o.value = c; o.text = c; currency.appendChild(o); });
+    // prefer server-injected currency list; fallback to a small set if not provided
+    const CURRENCY_OPTIONS = (window && window.CURRENCY_OPTIONS) ? window.CURRENCY_OPTIONS : ['USD','SGD','EUR','GBP'];
+  // placeholder option
+  const placeholderOpt = document.createElement('option');
+  placeholderOpt.value = '';
+  placeholderOpt.text = 'Select currency';
+  placeholderOpt.selected = true;
+  placeholderOpt.disabled = true;
+  currency.appendChild(placeholderOpt);
+  CURRENCY_OPTIONS.forEach(c => { const o = document.createElement('option'); o.value = c; o.text = c; currency.appendChild(o); });
+  // require a selection for per-experience currency
+  currency.required = true;
 
-    const removeBtn = document.createElement('button');
+  const removeBtn = document.createElement('button');
     removeBtn.type = 'button';
     removeBtn.className = 'btn btn-sm btn-outline-danger ms-2';
     removeBtn.textContent = 'Remove';
@@ -177,7 +212,13 @@ function initSignupForm() {
       updateWorkHidden();
     };
 
-    salary.addEventListener('blur', () => formatCurrencyInput(salary));
+  salary.addEventListener('blur', () => formatCurrencyInput(salary));
+
+    // clear validation when user interacts
+    jobTitle.addEventListener('input', () => clearFieldError(jobTitle));
+    salary.addEventListener('input', () => clearFieldError(salary));
+    currency.addEventListener('change', () => clearFieldError(currency));
+    expSkillsInput.addEventListener('input', () => clearFieldError(expSkillsInput));
 
   container.appendChild(jobTitle);
   // job title required indicator
@@ -196,8 +237,29 @@ function initSignupForm() {
 
     workExpsContainer.appendChild(container);
 
-  workExps.push({ jobTitle, salary, currency, expSkillsHidden });
+  workExps.push({ jobTitle, salary, currency, expSkillsHidden, expSkillsInput });
     updateWorkHidden();
+  }
+
+  function clearFieldError(el) {
+    if (!el) return;
+    el.classList.remove('is-invalid');
+    // remove any sibling invalid-feedback msg
+    const next = el.parentNode && el.parentNode.querySelector('.invalid-feedback');
+    if (next) next.remove();
+  }
+
+  function markFieldError(el, msg) {
+    if (!el) return;
+    el.classList.add('is-invalid');
+    // create or update invalid-feedback
+    let fb = el.parentNode && el.parentNode.querySelector('.invalid-feedback');
+    if (!fb) {
+      fb = document.createElement('div');
+      fb.className = 'invalid-feedback';
+      el.parentNode.appendChild(fb);
+    }
+    fb.textContent = msg || 'Invalid value';
   }
 
   function updateWorkHidden() {
@@ -217,10 +279,63 @@ function initSignupForm() {
         job_title: w.jobTitle.value || '',
         skills: skillsArr,
         median_salary: salaryNum,
-        currency: w.currency.value || 'USD'
+        // do not silently default currency here; allow server-side validation to catch empty values
+        currency: w.currency.value || ''
       };
     });
     workExpsHidden.value = JSON.stringify(arr);
+  }
+
+  function validateWorkExps() {
+    let valid = true;
+    let firstInvalid = null;
+    workExps.forEach((w, idx) => {
+      // clear previous state
+      clearFieldError(w.jobTitle);
+      clearFieldError(w.salary);
+      clearFieldError(w.currency);
+      // job title
+      if (!w.jobTitle.value || !w.jobTitle.value.trim()) {
+        markFieldError(w.jobTitle, 'Job title is required.');
+        valid = false;
+        if (!firstInvalid) firstInvalid = w.jobTitle;
+      }
+      // salary
+      const salaryRaw = (w.salary.value||'').toString().replace(/,/g, '');
+      const num = salaryRaw ? parseFloat(salaryRaw) : NaN;
+      if (isNaN(num)) {
+        markFieldError(w.salary, 'Enter a valid number for salary.');
+        valid = false;
+        if (!firstInvalid) firstInvalid = w.salary;
+      } else if (num < 0) {
+        markFieldError(w.salary, 'Salary must be non-negative.');
+        valid = false;
+        if (!firstInvalid) firstInvalid = w.salary;
+      }
+      // currency
+      if (!w.currency.value) {
+        markFieldError(w.currency, 'Please select a currency.');
+        valid = false;
+        if (!firstInvalid) firstInvalid = w.currency;
+      }
+      // skills
+      let skillsArr = [];
+      if (w.expSkillsHidden) skillsArr = (w.expSkillsHidden.value||'').split(',').map(s=>s.trim()).filter(Boolean);
+      if (skillsArr.length === 0) {
+        // mark the hidden input's previous visible element if possible
+        if (w.expSkillsHidden && w.expSkillsHidden.previousSibling) markFieldError(w.expSkillsHidden.previousSibling, 'Add at least one skill.');
+        valid = false;
+        if (!firstInvalid && w.expSkillsHidden && w.expSkillsHidden.previousSibling) firstInvalid = w.expSkillsHidden.previousSibling;
+      } else if (skillsArr.length > 5) {
+        if (w.expSkillsHidden && w.expSkillsHidden.previousSibling) markFieldError(w.expSkillsHidden.previousSibling, 'At most 5 skills allowed.');
+        valid = false;
+        if (!firstInvalid && w.expSkillsHidden && w.expSkillsHidden.previousSibling) firstInvalid = w.expSkillsHidden.previousSibling;
+      }
+    });
+    if (!valid && firstInvalid) {
+      try { firstInvalid.focus(); } catch (e) {}
+    }
+    return valid;
   }
 
   if (addWorkBtn) addWorkBtn.addEventListener('click', addWorkExp);
@@ -228,9 +343,14 @@ function initSignupForm() {
   // update hidden fields on form submit
   const form = document.getElementById('signup-form');
   if (form) {
-    form.addEventListener('submit', () => {
+    form.addEventListener('submit', (e) => {
       if (skillsHidden) skillsHidden.value = skills.join(', ');
       updateWorkHidden();
+      // run client-side validation for experiences and prevent submit if invalid
+      const ok = validateWorkExps();
+      if (!ok) {
+        e.preventDefault();
+      }
     });
   }
 }
