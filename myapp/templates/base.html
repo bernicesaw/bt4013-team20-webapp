@@ -65,6 +65,18 @@
             border: 2px solid #fff;
             box-shadow: 0 0 0 2px var(--app-purple);
         }
+
+        /* Stack labels above inputs for auth forms (signup/login/modal) */
+        form.stack-labels label,
+        form.stack-labels .form-label {
+            display: block;
+            margin-bottom: 0.25rem;
+            font-weight: 600;
+        }
+        form.stack-labels .form-control,
+        form.stack-labels .form-select {
+            width: 100%;
+        }
     </style>
 </head>
 <body>
@@ -78,18 +90,21 @@
             <!-- Left Navigation Links (Now updated to match prototype text) -->
             <div class="collapse navbar-collapse" id="navbarNav">
                 <ul class="navbar-nav">
-                    
+                    <li class="nav-item">
+                        <!-- Home Link -->
+                        <a class="nav-link {% if active_nav_item == 'home' %}active{% endif %}" href="/">Home</a>
+                    </li>
                     <li class="nav-item">
                         <!-- Dashboard Link -->
                         <a class="nav-link {% if active_nav_item == 'dashboard' %}active{% endif %}" href="/dashboard">Dashboard</a>
                     </li>
                     <li class="nav-item">
-                        <!-- Skill Adjacency Graph Link -->
-                        <a class="nav-link {% if active_nav_item == 'skillgraph' %}active{% endif %}" href="/">Skill Adjacency Graph</a>
+                        <!-- Skill Adjacency Graph Link (protected) -->
+                        <a class="nav-link protected-link {% if active_nav_item == 'skillgraph' %}active{% endif %}" href="/skillgraph/">Skill Adjacency Graph</a>
                     </li>
                     <li class="nav-item">
-                        <!-- AskAI Link -->
-                        <a class="nav-link {% if active_nav_item == 'chatbot' %}active{% endif %}" href="/askai">AskAI</a>
+                        <!-- AskAI Link (protected) -->
+                        <a class="nav-link protected-link {% if active_nav_item == 'chatbot' %}active{% endif %}" href="/askai/">AskAI</a>
                     </li>
                 </ul>
             </div>
@@ -105,22 +120,28 @@
                     </span>
                 </button>
 
-                <!-- User Profile Dropdown -->
+                <!-- User Profile / Auth Action -->
+                {% if request.user.is_authenticated %}
                 <div class="dropdown user-profile-dropdown">
                     <a class="d-flex align-items-center text-decoration-none dropdown-toggle" href="#" id="userDropdown" role="button" data-bs-toggle="dropdown" aria-expanded="false">
                         <img src="https://placehold.co/32x32/7918a3/ffffff?text=M" alt="User Avatar" class="user-profile-img me-2">
                         <div class="d-flex flex-column me-2">
-                            <span class="text-sm fw-bold" style="font-size: 0.85rem; line-height: 1;">Mustiq</span>
-                            <small class="text-muted" style="font-size: 0.7rem; line-height: 1;">Admin</small>
+                            <span class="text-sm fw-bold" style="font-size: 0.85rem; line-height: 1;">{{ request.user.get_full_name|default:request.user.username }}</span>
+                            <small class="text-muted" style="font-size: 0.7rem; line-height: 1;">Member</small>
                         </div>
                     </a>
                     <ul class="dropdown-menu dropdown-menu-end" aria-labelledby="userDropdown">
                         <li><a class="dropdown-item" href="#">Profile</a></li>
                         <li><a class="dropdown-item" href="#">Settings</a></li>
                         <li><hr class="dropdown-divider"></li>
-                        <li><a class="dropdown-item" href="#">Sign Out</a></li>
+                        <li><a class="dropdown-item" href="{% url 'accounts:logout' %}">Sign Out</a></li>
                     </ul>
                 </div>
+                {% else %}
+                <div class="me-2">
+                    <a class="btn btn-outline-primary" href="{% url 'accounts:login' %}">Login</a>
+                </div>
+                {% endif %}
             </div>
         </div>
     </nav>
@@ -135,11 +156,63 @@
         {% endblock %}
     </main>
 
+        <!-- Login modal shown when users click a protected link but are not authenticated -->
+        <div class="modal fade" id="loginModal" tabindex="-1" aria-labelledby="loginModalLabel" aria-hidden="true">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <div class="modal-header">
+                        <h5 class="modal-title" id="loginModalLabel">Please log in</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                    </div>
+                    <div class="modal-body">
+                        <form id="loginModalForm" method="post" action="{% url 'accounts:login' %}" class="stack-labels">
+                            {% csrf_token %}
+                            <div class="mb-3">
+                                <label for="id_username_modal" class="form-label">Email</label>
+                                <input type="email" class="form-control" id="id_username_modal" name="username" required>
+                            </div>
+                            <div class="mb-3">
+                                <label for="id_password_modal" class="form-label">Password</label>
+                                <input type="password" class="form-control" id="id_password_modal" name="password" required>
+                            </div>
+                            <input type="hidden" name="next" id="login-next" value="/">
+                            <button type="submit" class="btn btn-primary">Log in</button>
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+
     <!-- Bootstrap JS CDN (must be at the end of body) -->
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.3/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
 
     <!-- Custom JS Block -->
-    {% block extra_js %}{% endblock %}
+        {% block extra_js %}{% endblock %}
+        <script>
+            // whether user is authenticated (use request context processor)
+            {% if request.user.is_authenticated %}
+            const IS_AUTH = true;
+            {% else %}
+            const IS_AUTH = false;
+            {% endif %}
+
+            document.addEventListener('DOMContentLoaded', () => {
+                const protectedLinks = document.querySelectorAll('.protected-link');
+                protectedLinks.forEach(a => {
+                    a.addEventListener('click', (ev) => {
+                        if (!IS_AUTH) {
+                            ev.preventDefault();
+                            const target = a.getAttribute('href') || '/';
+                            // set next field in modal to redirect after login
+                            const nextInput = document.getElementById('login-next');
+                            if (nextInput) nextInput.value = target;
+                            const loginModal = new bootstrap.Modal(document.getElementById('loginModal'));
+                            loginModal.show();
+                        }
+                    });
+                });
+            });
+        </script>
 </body>
 </html>
 
