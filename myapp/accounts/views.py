@@ -59,6 +59,7 @@ def signup_view(request):
             median_salary = form.cleaned_data['median_salary']
             currency = form.cleaned_data['currency']
             work_experiences = form.cleaned_data['work_experiences']
+            notifications_opt_in = bool(form.cleaned_data.get('notifications'))
 
             # create Django user
             if User.objects.filter(username=email).exists():
@@ -72,6 +73,9 @@ def signup_view(request):
                     median_salary=median_salary,
                     currency=currency
                 )
+                # store notification preference
+                profile.notifications_enabled = notifications_opt_in
+                profile.save()
                 # create work experiences
                 for idx, we in enumerate(work_experiences):
                     WorkExperience.objects.create(
@@ -96,6 +100,7 @@ def signup_view(request):
                         "median_salary": str(median_salary),
                         "currency": currency,
                         "work_experiences": work_experiences,
+                        "notifications_enabled": notifications_opt_in,
                     }
 
                     # Use upsert so repeated signups update existing record instead of failing
@@ -155,6 +160,8 @@ from django.urls import reverse
 from django.contrib.auth.decorators import login_required
 from django.contrib import messages
 from django.http import HttpResponseForbidden
+from django.contrib.auth.forms import PasswordChangeForm
+from django.contrib.auth import update_session_auth_hash
 
 from django.contrib.auth import logout as auth_logout
 from django.urls import reverse
@@ -213,6 +220,8 @@ def profile_view(request):
         median_salary_raw = request.POST.get('median_salary', '')
         currency = request.POST.get('currency', '')
         work_experiences_raw = request.POST.get('work_experiences', '[]')
+        # notifications (may be changed elsewhere via settings page)
+        notifications_raw = request.POST.get('notifications')
 
         # validate/minimal checks
         errors = []
@@ -298,6 +307,9 @@ def profile_view(request):
         profile.job_title = job_title
         profile.skills = skills
         profile.median_salary = median_salary
+        # Only update notifications if provided in the profile edit form
+        if notifications_raw is not None:
+            profile.notifications_enabled = (notifications_raw.lower() in ('1', 'true', 'on'))
         if currency:
             profile.currency = currency
         profile.save()
@@ -326,6 +338,7 @@ def profile_view(request):
                 'median_salary': str(profile.median_salary) if profile.median_salary is not None else None,
                 'currency': profile.currency,
                 'work_experiences': work_exps,
+                'notifications_enabled': profile.notifications_enabled,
             }
             resp = None
             # Debug: log payload we will send to Supabase
@@ -391,4 +404,73 @@ def profile_view(request):
         'currency_json': currency_json,
         'work_experiences_json': work_experiences_json,
         'skills_json': skills_json,
+    })
+
+
+@login_required
+def settings_view(request):
+    """Allow the user to toggle notification preference and change password.
+
+    Two POST actions are supported on the same page:
+    - notifications form: includes 'save_notifications' submit button
+    - password change form: uses Django's PasswordChangeForm and 'change_password' submit
+    """
+    user = request.user
+    profile, _ = Profile.objects.get_or_create(user=user)
+
+    notif_message = None
+    pwd_message = None
+
+    if request.method == 'POST':
+        # Distinguish which form was submitted
+        if 'save_notifications' in request.POST:
+            # Toggle notification preference
+            new_val = request.POST.get('notifications')
+            profile.notifications_enabled = (new_val == 'on' or new_val in ('1', 'true'))
+            profile.save()
+            # Mirror to Supabase (best-effort)
+            try:
+                supabase = get_supabase_client(require_service_role=True)
+                payload = {
+                    'email': user.email,
+                    'notifications_enabled': profile.notifications_enabled,
+                }
+                try:
+                    resp = supabase.table('users').upsert(payload, on_conflict='email').execute()
+                    print('Supabase settings upsert response:', getattr(resp, 'status_code', None), file=sys.stderr)
+                except Exception as e:
+                    print('Supabase settings upsert failed:', e, file=sys.stderr)
+            except Exception as e:
+                print('Supabase settings mirror failed:', e, file=sys.stderr)
+            notif_message = 'Notification preferences saved.'
+
+        elif 'change_password' in request.POST:
+            form = PasswordChangeForm(user, request.POST)
+            if form.is_valid():
+                form.save()
+                # Keep the user logged in after password change
+                update_session_auth_hash(request, form.user)
+                pwd_message = 'Password changed successfully.'
+            else:
+                # attach form errors to pwd_message to display
+                pwd_message = form.errors.as_text()
+
+    # Prepare initial forms/values
+    pwd_form = PasswordChangeForm(user)
+    # Ensure password inputs have Bootstrap classes when rendered. We set these
+    # attributes server-side to avoid a dependency on third-party template
+    # filters (e.g. django-widget-tweaks) in templates.
+    try:
+        for fname in ('old_password', 'new_password1', 'new_password2'):
+            if fname in pwd_form.fields:
+                pwd_form.fields[fname].widget.attrs.update({'class': 'form-control', 'id': f'id_{fname}'})
+    except Exception:
+        # Ignore widget attribute failures; rendering without classes is acceptable
+        pass
+
+    return render(request, 'accounts/settings.html', {
+        'profile': profile,
+        'pwd_form': pwd_form,
+        'notif_message': notif_message,
+        'pwd_message': pwd_message,
     })
