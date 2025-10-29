@@ -120,6 +120,7 @@ def signup_view(request):
 
 
 from django.contrib.auth.views import LoginView
+from django.urls import reverse
 
 from django.contrib.auth import logout as auth_logout
 from django.urls import reverse
@@ -128,6 +129,17 @@ from django.shortcuts import redirect
 
 class SimpleLoginView(LoginView):
     template_name = 'accounts/login.html'
+    
+    def get_success_url(self):
+        # If a next parameter (redirect) was provided, use it.
+        redirect_to = self.get_redirect_url()
+        if redirect_to:
+            return redirect_to
+        # Default: send users who logged in from the login page to AskAI.
+        try:
+            return reverse('chatbot:chat')
+        except Exception:
+            return '/'
 
 
 def logout_view(request):
