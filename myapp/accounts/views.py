@@ -223,15 +223,17 @@ def profile_view(request):
         # notifications (may be changed elsewhere via settings page)
         notifications_raw = request.POST.get('notifications')
 
-        # validate/minimal checks
+        # validate/minimal checks (ensure required fields from signup are also required here)
         errors = []
         if not email:
             errors.append('Email is required.')
         if not job_title:
             errors.append('Job title is required.')
 
-        # parse skills
+        # parse skills (required on signup, enforce here too)
         skills = [s.strip() for s in (skills_raw or '').split(',') if s.strip()]
+        if not skills:
+            errors.append('At least one skill is required.')
         if len(skills) > 5:
             errors.append('At most 5 skills allowed.')
         # ensure skills are from authoritative list if available
@@ -244,9 +246,11 @@ def profile_view(request):
         except Exception:
             pass
 
-        # median salary parse
+        # median salary parse (required on signup)
         median_salary = None
-        if median_salary_raw:
+        if not median_salary_raw:
+            errors.append('Median salary is required.')
+        else:
             try:
                 median_salary = float(str(median_salary_raw).replace(',', ''))
                 if median_salary < 0:
@@ -283,6 +287,10 @@ def profile_view(request):
                 work_exps.append(exp)
         except Exception:
             errors.append('Invalid work_experiences JSON.')
+
+        # Ensure top-level currency is present (signup requires it)
+        if not currency:
+            errors.append('Currency is required.')
 
         if errors:
             for e in errors:

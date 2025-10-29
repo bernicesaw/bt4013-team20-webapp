@@ -108,11 +108,14 @@ function initSignupForm() {
     if (!skills.includes(v)) skills.push(v);
     if (skillsInput) skillsInput.value = '';
     renderSkills();
+    // clear any top-level skills validation now that a chip exists
+    try { clearFieldError(skillsInput); } catch (e) {}
     renderSkillSuggestions('');
   }
 
   if (skillsInput) {
-    skillsInput.addEventListener('input', (e) => renderSkillSuggestions(e.target.value));
+    // show suggestions and clear validation while typing
+    skillsInput.addEventListener('input', (e) => { renderSkillSuggestions(e.target.value); clearFieldError(skillsInput); });
     skillsInput.addEventListener('keydown', (e) => { if (e.key === 'Enter') { e.preventDefault(); addSkill(); } });
   }
 
@@ -135,8 +138,9 @@ function initSignupForm() {
     // per-experience skills: an input, suggestions, and chips list
     const expSkillsInput = document.createElement('input');
     expSkillsInput.placeholder = 'Type a skill';
-    expSkillsInput.className = 'form-control mb-2';
-    expSkillsInput.required = true;
+  expSkillsInput.className = 'form-control mb-2';
+  // Do not mark the visible per-experience skills input as required —
+  // validation is performed against the selected chips (hidden field).
     const expSkillSuggestions = document.createElement('div');
     expSkillSuggestions.className = 'mb-2';
     const expSkillsList = document.createElement('div');
@@ -168,7 +172,7 @@ function initSignupForm() {
       matches.forEach(m => {
         const b = document.createElement('button');
         b.type = 'button'; b.className = 'btn btn-sm btn-outline-secondary me-1 mb-1'; b.textContent = m;
-        b.onclick = () => { expSkillsArr.push(m); renderExpSkills(); expSkillsInput.focus(); };
+        b.onclick = () => { expSkillsArr.push(m); expSkillsInput.value = ''; renderExpSkills(); expSkillsInput.focus(); };
         expSkillSuggestions.appendChild(b);
       });
     }
@@ -397,8 +401,17 @@ function initSignupForm() {
     form.addEventListener('submit', (e) => {
       if (skillsHidden) skillsHidden.value = skills.join(', ');
       updateWorkHidden();
-      // run client-side validation for experiences and prevent submit if invalid
-      const ok = validateWorkExps();
+      // run client-side validation for experiences and top-level skills (chips)
+      const workOk = validateWorkExps();
+      let ok = workOk;
+      if (!skills || skills.length === 0) {
+        // require at least one selected top-level skill (chips)
+        markFieldError(skillsInput, 'Add at least one skill.');
+        ok = false;
+        if (workOk) {
+          try { skillsInput.focus(); } catch (e) {}
+        }
+      }
       if (!ok) {
         e.preventDefault();
       }

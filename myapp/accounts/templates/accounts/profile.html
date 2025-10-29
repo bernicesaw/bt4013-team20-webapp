@@ -24,12 +24,12 @@
           {% csrf_token %}
 
           <div class="mb-3">
-            <label for="id_email">Email Address</label>
+            <label for="id_email">Email Address {% if user.email %}{% endif %}<span class="text-danger">*</span></label>
             <input type="email" name="email" id="id_email" value="{{ user.email }}" class="form-control" required>
           </div>
 
           <div class="mb-3">
-            <label for="id_job_title">Job Title</label>
+            <label for="id_job_title">Job Title <span class="text-danger">*</span></label>
             <input type="text" name="job_title" id="id_job_title" list="jobtitles" class="form-control" value="{{ profile.job_title|default_if_none:'' }}" required>
             <datalist id="jobtitles">
               {% for jt in job_titles %}
@@ -39,22 +39,22 @@
           </div>
 
           <div class="mb-3">
-            <label for="skills-input">Skills <small class="text-muted">(add up to five)</small></label>
+            <label for="skills-input">Skills <small class="text-muted">(add up to five)</small> <span class="text-danger">*</span></label>
             <input id="skills-input" type="text" placeholder="Type a skill" class="form-control">
             <div id="skill-suggestions" class="mt-2"></div>
             <div id="skills-list" class="my-2"></div>
-            <input type="hidden" name="skills" id="skills-hidden" value="{{ profile.skills|join:', ' }}">
+            <input type="hidden" name="skills" id="skills-hidden" value="{{ profile.skills|join:', ' }}" required>
           </div>
 
           <div class="row g-2">
             <div class="col-md-8 mb-3">
-              <label for="id_median_salary">Monthly Median Salary</label>
-              <input type="number" step="0.01" min="0" name="median_salary" id="id_median_salary" class="form-control" value="{{ profile.median_salary|default_if_none:'' }}">
+                <label for="id_median_salary">Monthly Median Salary <span class="text-danger">*</span></label>
+                <input type="number" step="0.01" min="0" name="median_salary" id="id_median_salary" class="form-control" value="{{ profile.median_salary|default_if_none:'' }}" required>
             </div>
             <div class="col-md-4 mb-3">
-                <label for="id_currency">Currency</label>
-                <select name="currency" id="id_currency" class="form-select">
-                  <option value="">Select currency</option>
+                  <label for="id_currency">Currency <span class="text-danger">*</span></label>
+                  <select name="currency" id="id_currency" class="form-select" required>
+                    <option value="">Select currency</option>
                   {% for c in currency_list %}
                     <option value="{{ c }}" {% if profile.currency == c %}selected{% endif %}>{{ c }}</option>
                   {% endfor %}
