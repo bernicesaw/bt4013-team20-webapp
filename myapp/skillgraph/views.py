@@ -1,6 +1,8 @@
 from django.shortcuts import render
+from django.contrib.auth.decorators import login_required
 
 # Create your views here.
+@login_required
 def graph_view(request):
     """Renders the Skill Adjacency Graph page."""
     # Original data structure (or fetch this from your database)

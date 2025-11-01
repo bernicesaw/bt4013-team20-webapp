@@ -12,6 +12,11 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+try:
+    # load environment variables from top-level .env if present
+    import load_env  # myapp/load_env.py
+except Exception:
+    pass
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -40,7 +45,9 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'dashboard.apps.DashboardConfig', # Main dashboard app
     'skillgraph.apps.SkillgraphConfig', # Skill graph visualization app
-    'chatbot.apps.ChatbotConfig', # Chatbot integration app
+    # 'chatbot.apps.ChatbotConfig', # Chatbot integration app
+    'chatbot',
+    'accounts.apps.AccountsConfig',
 ]
 
 MIDDLEWARE = [
@@ -124,3 +131,13 @@ STATIC_URL = 'static/'
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
+
+
+# ============================================
+# Career Chatbot Configuration
+# ============================================
+CHATBOT_URL = os.getenv(
+    'CHATBOT_URL',
+    'http://localhost:8000/career-rag-agent'
+)
+

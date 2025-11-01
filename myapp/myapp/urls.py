@@ -16,10 +16,14 @@ Including another URLconf
 """
 from django.contrib import admin
 from django.urls import path, include
+from . import views as project_views
 
 urlpatterns = [
     path('admin/', admin.site.urls),
-    path('', include('skillgraph.urls')), # Change to home page when ready
+    # Use a single include for skillgraph to avoid duplicate URL namespace warnings.
+    path('', project_views.home, name='home'),
     path('skillgraph/', include('skillgraph.urls')), # Include skillgraph app URLs
     path('dashboard/', include('dashboard.urls')), # Include dashboard app URLs
+    path('accounts/', include('accounts.urls', namespace='accounts')),
+    path('askai/', include('chatbot.urls')), # AskAI/chatbot
 ]
