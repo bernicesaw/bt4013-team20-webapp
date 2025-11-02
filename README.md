@@ -20,4 +20,4 @@ Note:
 - Uncomment out the `@login_required` decorator in myapp/skillgraph/views.py (line 5) before deploying the application.
 - Uncomment out other urls in myapp/urls.py that were commented out for testing purposes.
 - Uncomment out other apps in myapp/settings.py under installed apps that were commented out for testing purposes.
-- to fill in the supabase database password in myapp/myapp/.env (line 1)
+- To connect user id to skill graph (via login?)
