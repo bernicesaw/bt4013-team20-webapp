@@ -19,11 +19,15 @@ from django.urls import path, include
 from . import views as project_views
 
 urlpatterns = [
+    # path('admin/', admin.site.urls),
+    # # Use a single include for skillgraph to avoid duplicate URL namespace warnings.
+    # # path('', project_views.home, name='home'),
+    # path('skillgraph/', include('skillgraph.urls')), # Include skillgraph app URLs
+    # path('dashboard/', include('dashboard.urls')), # Include dashboard app URLs
+    # path('accounts/', include('accounts.urls', namespace='accounts')),
+    # path('askai/', include('chatbot.urls')), # AskAI/chatbot
+
+    # bernice temp urls (uncomment above urls later and remove urls below)
     path('admin/', admin.site.urls),
-    # Use a single include for skillgraph to avoid duplicate URL namespace warnings.
-    path('', project_views.home, name='home'),
-    path('skillgraph/', include('skillgraph.urls')), # Include skillgraph app URLs
-    path('dashboard/', include('dashboard.urls')), # Include dashboard app URLs
-    path('accounts/', include('accounts.urls', namespace='accounts')),
-    path('askai/', include('chatbot.urls')), # AskAI/chatbot
+    path('', include('skillgraph.urls')),
 ]

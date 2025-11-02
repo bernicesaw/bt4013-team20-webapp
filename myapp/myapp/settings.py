@@ -12,6 +12,9 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 import os
+import dj_database_url
+
+# Load environment variables from .env file
 try:
     # load environment variables from top-level .env if present
     import load_env  # myapp/load_env.py
@@ -45,9 +48,10 @@ INSTALLED_APPS = [
     'django.contrib.staticfiles',
     'dashboard.apps.DashboardConfig', # Main dashboard app
     'skillgraph.apps.SkillgraphConfig', # Skill graph visualization app
+    'django.contrib.humanize',  # Humanize app for template filters
     # 'chatbot.apps.ChatbotConfig', # Chatbot integration app
-    'chatbot',
-    'accounts.apps.AccountsConfig',
+    # 'chatbot',
+    # 'accounts.apps.AccountsConfig',
 ]
 
 MIDDLEWARE = [
@@ -83,11 +87,10 @@ WSGI_APPLICATION = 'myapp.wsgi.application'
 # Database
 # https://docs.djangoproject.com/en/5.2/ref/settings/#databases
 
+DATABASE_URL = os.environ.get('SUPABASE_POOLER_URL')
+
 DATABASES = {
-    'default': {
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    }
+    'default': dj_database_url.parse(DATABASE_URL)
 }
 
 
