@@ -48,58 +48,38 @@ Examples:
 
 
 def extract_and_normalize_job_titles(query: str) -> str:
-    """
-    Extract potential job titles from query and normalize them
-    Returns the query with normalized job titles
-    """
-    # Try to normalize the entire query first (in case it's just a job title)
-    normalized = job_normalizer.normalize(query, threshold=75)
+    normalized = job_normalizer.normalize(query)
+
+    # If normalization is successful, return the normalized job title
     if normalized:
         return normalized
     
-    # Try to find job titles within the query
-    # Split query into potential phrases
-    words = query.split()
-    
-    # Try phrases of different lengths (1-5 words)
-    for length in range(5, 0, -1):  # Start with longer phrases
-        for i in range(len(words) - length + 1):
-            phrase = " ".join(words[i:i+length])
-            
-            # Try to normalize this phrase
-            normalized = job_normalizer.normalize(phrase, threshold=70)
-            
-            if normalized:
-                # Replace the phrase in the original query
-                # Use case-insensitive replacement
-                pattern = re.compile(re.escape(phrase), re.IGNORECASE)
-                normalized_query = pattern.sub(normalized, query)
-                
-                print(f"🔄 Job title normalized: '{phrase}' → '{normalized}'")
-                return normalized_query
-    
-    # No job title found to normalize
+    # If no normalization, return the original query
     return query
+
 
 
 def graph_chain_wrapper(query: str) -> str:
     """Wrapper that normalizes job titles before querying the career graph"""
     try:
-        # Normalize job titles in the query
+        # Extract and normalize job title from the query
         normalized_query = extract_and_normalize_job_titles(query)
-        
-        # Log if normalization occurred
-        if normalized_query != query:
-            print(f"📝 Original query: {query}")
-            print(f"✅ Normalized query: {normalized_query}")
-        
-        # Invoke the career graph chain with normalized query
+
+        # If no normalization is found, return a response indicating no information
+        if normalized_query == query:
+            return "I don't have information for that job title in the database."
+
+        # Log normalized query (for debugging)
+        print(f"Query after normalization: {normalized_query}")
+
+        # Run the Cypher query as usual with the normalized query
         result = career_cypher_chain.invoke({"query": normalized_query})
         return result.get("result", str(result))
     
     except Exception as e:
         print(f"❌ Error in graph_chain_wrapper: {str(e)}")
         return f"I encountered an error querying the career database: {str(e)}"
+
 
 
 def course_chain_wrapper(query: str) -> str:
@@ -186,21 +166,21 @@ career_rag_agent_executor = AgentExecutor(
 print("✅ Career RAG Agent initialized successfully in Django with job title normalization")
 
 
-# --- Test function for debugging ---
-def test_normalization(test_input: str):
-    """Test the job title normalization"""
-    print(f"\n{'='*60}")
-    print(f"Testing normalization for: '{test_input}'")
-    print(f"{'='*60}")
+# # --- Test function for debugging ---
+# def test_normalization(test_input: str):
+#     """Test the job title normalization"""
+#     print(f"\n{'='*60}")
+#     print(f"Testing normalization for: '{test_input}'")
+#     print(f"{'='*60}")
     
-    # Get normalization with feedback
-    normalized, feedback = job_normalizer.normalize_with_feedback(test_input)
+#     # Get normalization with feedback
+#     normalized, feedback = job_normalizer.normalize_with_feedback(test_input)
     
-    print(f"Result: {normalized}")
-    print(f"Feedback: {feedback}")
-    print(f"{'='*60}\n")
+#     print(f"Result: {normalized}")
+#     print(f"Feedback: {feedback}")
+#     print(f"{'='*60}\n")
     
-    return normalized
+#     return normalized
 
 
 # # --- Uncomment to test the agent ---

@@ -5,72 +5,7 @@ Handles fuzzy matching and synonym mapping for career graph queries
 from rapidfuzz import process, fuzz
 from typing import Optional, List, Tuple
 
-
-class JobTitleNormalizer:
-    """Base class for job title normalization using fuzzy matching"""
-    
-    def __init__(self, graph):
-        """Initialize with Neo4j graph connection"""
-        self.graph = graph
-        self.job_names = self._fetch_all_job_names()
-        print(f"✅ Loaded {len(self.job_names)} job titles from database")
-        
-    def _fetch_all_job_names(self) -> List[str]:
-        """Fetch all unique job names from Neo4j"""
-        query = "MATCH (j:Job) RETURN DISTINCT j.name AS name"
-        result = self.graph.query(query)
-        return [record['name'] for record in result]
-    
-    def normalize(self, user_input: str, threshold: int = 80) -> Optional[str]:
-        """
-        Normalize user input to match exact job name in database
-        
-        Args:
-            user_input: Raw job title from user
-            threshold: Minimum similarity score (0-100) to accept match
-            
-        Returns:
-            Exact job name from database, or None if no good match
-        """
-        if not user_input or not self.job_names:
-            return None
-        
-        # Clean input
-        cleaned_input = user_input.strip()
-        
-        # Find best match using fuzzy matching
-        best_match = process.extractOne(
-            cleaned_input,
-            self.job_names,
-            scorer=fuzz.token_sort_ratio
-        )
-        
-        if best_match and best_match[1] >= threshold:
-            return best_match[0]  # Return the matched job name
-        
-        return None
-    
-    def get_suggestions(self, user_input: str, top_n: int = 3) -> List[Tuple[str, float]]:
-        """
-        Get top N job suggestions for user input
-        
-        Returns:
-            List of (job_name, similarity_score) tuples
-        """
-        if not user_input or not self.job_names:
-            return []
-        
-        matches = process.extract(
-            user_input.strip(),
-            self.job_names,
-            scorer=fuzz.token_sort_ratio,
-            limit=top_n
-        )
-        
-        return [(match[0], match[1]) for match in matches]
-
-
-class EnhancedJobTitleNormalizer(JobTitleNormalizer):
+class EnhancedJobTitleNormalizer:
     """Enhanced normalizer with synonym dictionary + fuzzy matching"""
     
     # Common synonyms and variations
@@ -214,6 +149,18 @@ class EnhancedJobTitleNormalizer(JobTitleNormalizer):
         "financial engineer": "Financial analyst or engineer",
         "quant": "Financial analyst or engineer",
     }
+
+    def __init__(self, graph):
+        """Initialize with Neo4j graph connection"""
+        self.graph = graph
+        self.job_names = self._fetch_all_job_names()
+        print(f"✅ Loaded {len(self.job_names)} job titles from database")
+
+    def _fetch_all_job_names(self) -> List[str]:
+        """Fetch all unique job names from Neo4j"""
+        query = "MATCH (j:Job) RETURN DISTINCT j.name AS name"
+        result = self.graph.query(query)
+        return [record['name'] for record in result]
     
     def normalize(self, user_input: str, threshold: int = 75) -> Optional[str]:
         """
@@ -242,31 +189,6 @@ class EnhancedJobTitleNormalizer(JobTitleNormalizer):
                 return db_name
         
         # Fall back to fuzzy matching on original case-preserved input
-        return super().normalize(user_input, threshold)
-    
-    def normalize_with_feedback(self, user_input: str, threshold: int = 75) -> Tuple[Optional[str], str]:
-        """
-        Normalize and return feedback about the normalization
-        
-        Returns:
-            Tuple of (normalized_name, feedback_message)
-        """
-        if not user_input:
-            return None, "No input provided"
-        
-        cleaned = user_input.strip().lower()
-        
-        # Check synonym match
-        if cleaned in self.SYNONYMS:
-            matched = self.SYNONYMS[cleaned]
-            return matched, f"Synonym match: '{user_input}' → '{matched}'"
-        
-        # Check partial synonym match
-        for synonym, db_name in self.SYNONYMS.items():
-            if synonym in cleaned or cleaned in synonym:
-                return db_name, f"Partial synonym match: '{user_input}' → '{db_name}'"
-        
-        # Try fuzzy matching
         best_match = process.extractOne(
             user_input.strip(),
             self.job_names,
@@ -274,12 +196,54 @@ class EnhancedJobTitleNormalizer(JobTitleNormalizer):
         )
         
         if best_match and best_match[1] >= threshold:
-            return best_match[0], f"Fuzzy match (score: {best_match[1]}): '{user_input}' → '{best_match[0]}'"
+            return best_match[0]  # Return the matched job name
         
-        # No match found
-        suggestions = self.get_suggestions(user_input, top_n=3)
-        if suggestions:
-            suggestion_str = ", ".join([f"'{s[0]}'" for s in suggestions])
-            return None, f"No match found. Did you mean: {suggestion_str}?"
-        
-        return None, f"No match found for '{user_input}'"
+        return None
+
+    
+
+# # testing
+# if __name__ == "__main__":
+#     """
+#     Quick standalone test for job title normalization.
+#     Run with:
+#         python job_title_normalizer.py
+#     Make sure your .env file has:
+#         NEO4J_URI, NEO4J_USERNAME, NEO4J_PASSWORD
+#     """
+
+#     import os
+#     from dotenv import load_dotenv
+#     from langchain_community.graphs import Neo4jGraph
+
+#     load_dotenv()
+
+#     # --- Connect to Neo4j ---
+#     graph = Neo4jGraph(
+#         url=os.getenv("NEO4J_URI"),
+#         username=os.getenv("NEO4J_USERNAME"),
+#         password=os.getenv("NEO4J_PASSWORD"),
+#     )
+
+#     # --- Instantiate your normalizer ---
+#     normalizer = EnhancedJobTitleNormalizer(graph)
+
+#     # --- Test queries ---
+#     test_inputs = [
+#         "backend dev",
+#         "frontend developer",
+#         "ml engineer",
+#         "ai app developer",
+#         "data sci",
+#         "devops",
+#         "cloud infra",
+#         "ux researcher",
+#         "business analyst",
+#         "random title",
+#     ]
+
+#     print("\n🔍 Testing Job Title Normalizer with Live Neo4j Connection:\n")
+#     for input_str in test_inputs:
+#         normalized, feedback = normalizer.normalize_with_feedback(input_str)
+#         print(f"Input: {input_str:<25} → Normalized: {normalized}")
+#         print(f"   Feedback: {feedback}\n")
