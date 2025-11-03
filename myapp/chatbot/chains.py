@@ -173,23 +173,27 @@ print("✅ Career Skill Graph QA Chain initialized successfully.")
 # ============================================
 # COURSE RECOMMENDATION CHAIN (Supabase)
 # ============================================
+# --- Optionally disable the course recommender for local/dev environments ---
+if os.getenv("DISABLE_COURSE_RECOMMENDER", "0").lower() in ("1", "true", "yes"):
+    print("Course recommender disabled by DISABLE_COURSE_RECOMMENDER environment variable.")
+    supabase_vector_store = None
+    qa_chain = None
+else:
+    # --- Initialize embeddings and vector store inside a guarded try/except ---
+    try:
+        embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
 
-# --- Initialize embeddings ---
-embeddings = SentenceTransformerEmbeddings(model_name="all-MiniLM-L6-v2")
+        # --- Connect to Supabase vector store ---
+        print("Connecting to PGVector store...")
+        supabase_vector_store = PGVector(
+            connection=SUPABASE_CONNECTION_STRING,
+            embeddings=embeddings,
+            collection_name="course_embeddings",
+            use_jsonb=True,
+        )
 
-
-# --- Connect to Supabase vector store ---
-print("Connecting to PGVector store...")
-supabase_vector_store = PGVector(
-    connection=SUPABASE_CONNECTION_STRING,
-    embeddings=embeddings,
-    collection_name="course_embeddings",
-    use_jsonb=True,
-)
-
-
-# --- Define prompt template ---
-course_template = """You are a helpful course recommender system for an online learning platform.
+        # --- Define prompt template ---
+        course_template = """You are a helpful course recommender system for an online learning platform.
 
 Based on the following course information, recommend the most relevant courses to the user.
 
@@ -209,24 +213,32 @@ If no relevant courses are found, politely let the user know and suggest they tr
 Remember: Use ONLY the actual course_url values from the metadata. Never generate example.com or placeholder URLs.
 """
 
-system_prompt = SystemMessagePromptTemplate(
-    prompt=PromptTemplate(input_variables=["context"], template=course_template)
-)
-human_prompt = HumanMessagePromptTemplate(
-    prompt=PromptTemplate(input_variables=["question"], template="{question}")
-)
-review_prompt = ChatPromptTemplate.from_messages([system_prompt, human_prompt])
+        system_prompt = SystemMessagePromptTemplate(
+            prompt=PromptTemplate(input_variables=["context"], template=course_template)
+        )
+        human_prompt = HumanMessagePromptTemplate(
+            prompt=PromptTemplate(input_variables=["question"], template="{question}")
+        )
+        review_prompt = ChatPromptTemplate.from_messages([system_prompt, human_prompt])
 
 
-# --- Build Course Recommendation RetrievalQA chain ---
-qa_chain = RetrievalQA.from_chain_type(
-    llm=ChatOpenAI(model=CAREER_QA_MODEL, temperature=0),
-    chain_type="stuff",
-    retriever=supabase_vector_store.as_retriever(
-        search_kwargs={"k": 5}  # Retrieve top 5 most relevant courses
-    ),
-    return_source_documents=True,  # Include source documents in response
-)
-qa_chain.combine_documents_chain.llm_chain.prompt = review_prompt
+        # --- Build Course Recommendation RetrievalQA chain ---
+        qa_chain = RetrievalQA.from_chain_type(
+            llm=ChatOpenAI(model=CAREER_QA_MODEL, temperature=0),
+            chain_type="stuff",
+            retriever=supabase_vector_store.as_retriever(
+                search_kwargs={"k": 5}  # Retrieve top 5 most relevant courses
+            ),
+            return_source_documents=True,  # Include source documents in response
+        )
+        qa_chain.combine_documents_chain.llm_chain.prompt = review_prompt
 
-print("✅ Course Recommender Chain initialized successfully.")
+        print("✅ Course Recommender Chain initialized successfully.")
+    except Exception as e:
+        print("Warning: failed to initialize course recommender:", repr(e))
+        supabase_vector_store = None
+        qa_chain = None
+    except Exception as e:
+        print("Warning: failed to initialize course recommender:", repr(e))
+        supabase_vector_store = None
+        qa_chain = None
