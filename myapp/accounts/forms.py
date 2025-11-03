@@ -45,6 +45,7 @@ class SignupForm(forms.Form):
     skills = forms.CharField(required=True, help_text='Comma-separated skills (add up to five)')
 
     median_salary = forms.DecimalField(max_digits=12, decimal_places=2, label='Monthly Median Salary', widget=forms.NumberInput(attrs={'class': 'form-control'}))
+    years_experience = forms.DecimalField(max_digits=4, decimal_places=1, label='Years of Work Experience', widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1', 'min': '0'}))
     # prepend a placeholder option for the currency select so the dropdown shows "Select currency"
     CURRENCY_CHOICES_WITH_PLACEHOLDER = [('', 'Select currency')] + CURRENCY_CHOICES
     currency = forms.ChoiceField(choices=CURRENCY_CHOICES_WITH_PLACEHOLDER, label='Currency', widget=forms.Select(attrs={'class': 'form-select'}))

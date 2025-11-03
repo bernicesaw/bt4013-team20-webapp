@@ -57,6 +57,7 @@ def signup_view(request):
             job_title = form.cleaned_data['job_title']
             skills = form.cleaned_data['skills']
             median_salary = form.cleaned_data['median_salary']
+            years_experience = form.cleaned_data.get('years_experience')
             currency = form.cleaned_data['currency']
             work_experiences = form.cleaned_data['work_experiences']
             notifications_opt_in = bool(form.cleaned_data.get('notifications'))
@@ -71,7 +72,8 @@ def signup_view(request):
                     job_title=job_title,
                     skills=skills,
                     median_salary=median_salary,
-                    currency=currency
+                    currency=currency,
+                    years_experience=years_experience
                 )
                 # store notification preference
                 profile.notifications_enabled = notifications_opt_in
@@ -98,6 +100,7 @@ def signup_view(request):
                         "job_title": job_title,
                         "skills": skills,
                         "median_salary": str(median_salary),
+                        "years_experience": str(years_experience) if years_experience is not None else None,
                         "currency": currency,
                         "work_experiences": work_experiences,
                         "notifications_enabled": notifications_opt_in,
@@ -218,6 +221,7 @@ def profile_view(request):
         job_title = request.POST.get('job_title', '').strip()
         skills_raw = request.POST.get('skills', '')
         median_salary_raw = request.POST.get('median_salary', '')
+        years_experience_raw = request.POST.get('years_experience', '')
         currency = request.POST.get('currency', '')
         work_experiences_raw = request.POST.get('work_experiences', '[]')
         # notifications (may be changed elsewhere via settings page)
@@ -257,6 +261,18 @@ def profile_view(request):
                     errors.append('Median salary must be non-negative.')
             except Exception:
                 errors.append('Median salary must be a number.')
+
+        # years of experience (required) - accept decimal like 0.5
+        years_experience = None
+        if years_experience_raw is None or years_experience_raw == '':
+            errors.append('Years of experience is required.')
+        else:
+            try:
+                years_experience = float(str(years_experience_raw))
+                if years_experience < 0:
+                    errors.append('Years of experience must be non-negative.')
+            except Exception:
+                errors.append('Years of experience must be a number (e.g. 0.5).')
 
         # work_experiences parse and validation
         work_exps = []
@@ -315,6 +331,7 @@ def profile_view(request):
         profile.job_title = job_title
         profile.skills = skills
         profile.median_salary = median_salary
+        profile.years_experience = years_experience
         # Only update notifications if provided in the profile edit form
         if notifications_raw is not None:
             profile.notifications_enabled = (notifications_raw.lower() in ('1', 'true', 'on'))
@@ -345,6 +362,7 @@ def profile_view(request):
                 'skills': profile.skills,
                 'median_salary': str(profile.median_salary) if profile.median_salary is not None else None,
                 'currency': profile.currency,
+                'years_experience': str(profile.years_experience) if profile.years_experience is not None else None,
                 'work_experiences': work_exps,
                 'notifications_enabled': profile.notifications_enabled,
             }

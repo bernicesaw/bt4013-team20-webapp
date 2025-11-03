@@ -41,6 +41,11 @@
           </div>
 
           <div class="mb-3">
+            <label for="{{ form.years_experience.id_for_label }}">{{ form.years_experience.label }} {% if form.years_experience.field.required %}<span class="text-danger">*</span>{% endif %}</label>
+            {{ form.years_experience }}
+          </div>
+
+          <div class="mb-3">
             <label for="id_job_title">{{ form.job_title.label }} {% if form.job_title.field.required %}<span class="text-danger">*</span>{% endif %}</label>
             <input type="text" name="job_title" id="id_job_title" list="jobtitles" class="form-control" value="{{ form.job_title.value|default_if_none:'' }}" required>
             <datalist id="jobtitles">
