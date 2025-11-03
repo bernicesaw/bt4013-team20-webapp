@@ -37,6 +37,8 @@ class Profile(models.Model):
     currency = models.CharField(max_length=32, choices=CURRENCY_CHOICES, default='USD')
     # Whether the user has opted in to receive notifications from the app
     notifications_enabled = models.BooleanField(default=False)
+    # Total years of professional experience (allow decimals, e.g. 0.5)
+    years_experience = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
 
     def __str__(self):
         return f"{self.user.email} profile"

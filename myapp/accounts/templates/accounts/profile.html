@@ -29,6 +29,11 @@
           </div>
 
           <div class="mb-3">
+            <label for="id_years_experience">Years of Work Experience <span class="text-danger">*</span></label>
+            <input type="number" step="0.1" min="0" name="years_experience" id="id_years_experience" class="form-control" value="{{ profile.years_experience|default_if_none:'' }}" required>
+          </div>
+
+          <div class="mb-3">
             <label for="id_job_title">Job Title <span class="text-danger">*</span></label>
             <input type="text" name="job_title" id="id_job_title" list="jobtitles" class="form-control" value="{{ profile.job_title|default_if_none:'' }}" required>
             <datalist id="jobtitles">
@@ -47,10 +52,10 @@
           </div>
 
           <div class="row g-2">
-            <div class="col-md-8 mb-3">
-                <label for="id_median_salary">Monthly Median Salary <span class="text-danger">*</span></label>
-                <input type="number" step="0.01" min="0" name="median_salary" id="id_median_salary" class="form-control" value="{{ profile.median_salary|default_if_none:'' }}" required>
-            </div>
+      <div class="col-md-8 mb-3">
+        <label for="id_median_salary">Monthly Median Salary <span class="text-danger">*</span></label>
+        <input type="number" step="0.01" min="0" name="median_salary" id="id_median_salary" class="form-control" value="{{ profile.median_salary|default_if_none:'' }}" required>
+      </div>
             <div class="col-md-4 mb-3">
                   <label for="id_currency">Currency <span class="text-danger">*</span></label>
                   <select name="currency" id="id_currency" class="form-select" required>
