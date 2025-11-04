@@ -211,3 +211,5 @@ __marimo__/
 
 # Project virtual environment created under the myapp folder
 myapp/newenv/
+# local developer tools (do not commit)
+myapp/tools/

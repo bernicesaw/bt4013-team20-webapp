@@ -13,7 +13,7 @@ try:
 except Exception:
     pass
 
-from .forms import SignupForm, JOB_TITLE_CHOICES
+from .forms import SignupForm, JOB_TITLE_CHOICES, validate_password_strength
 from .models import Profile, WorkExperience, CURRENCY_CHOICES
 import json
 
@@ -473,6 +473,24 @@ def settings_view(request):
         elif 'change_password' in request.POST:
             form = PasswordChangeForm(user, request.POST)
             if form.is_valid():
+                # enforce the same password strength rules as signup
+                try:
+                    new_pw = form.cleaned_data.get('new_password1', '')
+                    validate_password_strength(new_pw)
+                except Exception as e:
+                    # attach password strength validation error to the form
+                    try:
+                        from django.core.exceptions import ValidationError
+                        if isinstance(e, ValidationError):
+                            for msg in e.messages:
+                                form.add_error('new_password1', msg)
+                        else:
+                            form.add_error('new_password1', str(e))
+                    except Exception:
+                        form.add_error('new_password1', 'Password does not meet requirements.')
+
+            # After potential add_error above, re-check form validity and save
+            if form.is_valid():
                 form.save()
                 # Keep the user logged in after password change
                 update_session_auth_hash(request, form.user)
@@ -490,6 +508,11 @@ def settings_view(request):
         for fname in ('old_password', 'new_password1', 'new_password2'):
             if fname in pwd_form.fields:
                 pwd_form.fields[fname].widget.attrs.update({'class': 'form-control', 'id': f'id_{fname}'})
+                # Hide Django's default password help text (we show our own requirements UI)
+                try:
+                    pwd_form.fields[fname].help_text = ''
+                except Exception:
+                    pass
     except Exception:
         # Ignore widget attribute failures; rendering without classes is acceptable
         pass

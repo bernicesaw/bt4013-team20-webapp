@@ -1,4 +1,117 @@
-// signup.js - handles skills chips, suggestions, work experience entries, and salary formatting
+// signup.js - handles skills chips, suggestions, work experience entries, password UI, and salary formatting
+
+// Password requirement helpers
+function checkPasswordStrength(pwd) {
+  const res = {
+    length: false,
+    digit: false,
+    lower: false,
+    upper: false,
+  };
+  if (!pwd || typeof pwd !== 'string') return { ...res, valid: false };
+  res.length = pwd.length >= 8;
+  res.digit = /\d/.test(pwd);
+  res.lower = /[a-z]/.test(pwd);
+  res.upper = /[A-Z]/.test(pwd);
+  res.valid = res.length && res.digit && res.lower && res.upper;
+  return res;
+}
+
+function updateRequirementsUI(listEl, result) {
+  if (!listEl) return;
+  const items = listEl.querySelectorAll('li[data-req]');
+  items.forEach(li => {
+    const key = li.getAttribute('data-req');
+    const ok = !!result[key];
+    li.classList.remove('text-success', 'text-muted');
+    li.classList.add(ok ? 'text-success' : 'text-muted');
+    // prepend a small symbol
+    let sym = li.querySelector('.req-sym');
+    if (!sym) {
+      sym = document.createElement('span');
+      sym.className = 'req-sym me-1';
+      li.insertBefore(sym, li.firstChild);
+    }
+    sym.textContent = ok ? '✓' : '✕';
+  });
+}
+
+// global lightweight field error helpers (used by password validation and other global checks)
+function clearFieldError(el) {
+  if (!el) return;
+  el.classList.remove('is-invalid');
+  const parent = el.parentNode;
+  if (!parent) return;
+  const next = parent.querySelector('.invalid-feedback');
+  if (next) next.remove();
+}
+
+function markFieldError(el, msg) {
+  if (!el) return;
+  el.classList.add('is-invalid');
+  const parent = el.parentNode;
+  if (!parent) return;
+  let fb = parent.querySelector('.invalid-feedback');
+  if (!fb) {
+    fb = document.createElement('div');
+    fb.className = 'invalid-feedback';
+    parent.appendChild(fb);
+  }
+  fb.textContent = msg || 'Invalid value';
+}
+
+function setupPasswordValidation(opts) {
+  // opts: { listId, inputId, confirmId, form }
+  const listEl = document.getElementById(opts.listId);
+  const input = document.getElementById(opts.inputId);
+  const confirm = opts.confirmId ? document.getElementById(opts.confirmId) : null;
+  const form = opts.form || (input && input.closest('form')) || null;
+
+  function runCheck() {
+    const pwd = input && input.value ? input.value : '';
+    const result = checkPasswordStrength(pwd);
+    updateRequirementsUI(listEl, result);
+    // optional: also mark matching
+    if (confirm) {
+      const match = pwd && confirm.value && pwd === confirm.value;
+      if (match) {
+        confirm.classList.remove('is-invalid');
+      }
+    }
+    return result.valid;
+  }
+
+  if (input) {
+    input.addEventListener('input', () => {
+      clearFieldError(input);
+      runCheck();
+    });
+  }
+  if (confirm) {
+    confirm.addEventListener('input', () => {
+      clearFieldError(confirm);
+    });
+  }
+
+  if (form) {
+    form.addEventListener('submit', (e) => {
+      const ok = runCheck();
+      // check confirm matches if provided
+      if (confirm) {
+        const pwd = input.value || '';
+        const match = pwd === (confirm.value || '');
+        if (!match) {
+          markFieldError(confirm, 'Passwords do not match.');
+        }
+        if (!match) e.preventDefault();
+      }
+      if (!ok) {
+        markFieldError(input, 'Password does not meet the requirements.');
+        e.preventDefault();
+      }
+    });
+  }
+}
 
 // Format a number into locale string with 2 decimals
 function formatCurrencyInput(el) {
@@ -426,4 +539,12 @@ document.addEventListener('DOMContentLoaded', () => {
   if (mainSalary) mainSalary.addEventListener('blur', () => formatCurrencyInput(mainSalary));
   // initialize dynamic form behaviors
   try { initSignupForm(); } catch (e) { console.warn('initSignupForm failed', e); }
+  // initialize password requirement checks for signup page
+  try {
+    setupPasswordValidation({ listId: 'password-requirements-list', inputId: 'id_password', confirmId: 'id_password_repeat', form: document.getElementById('signup-form') });
+  } catch (e) { /* noop */ }
+  // initialize password checks for settings change password form
+  try {
+    setupPasswordValidation({ listId: 'password-requirements-list-settings', inputId: 'id_new_password1', confirmId: 'id_new_password2' });
+  } catch (e) { /* noop */ }
 });

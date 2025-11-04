@@ -33,11 +33,27 @@
           <div class="mb-3">
             <label for="{{ form.password.id_for_label }}">{{ form.password.label }} {% if form.password.field.required %}<span class="text-danger">*</span>{% endif %}</label>
             {{ form.password }}
+            {% for error in form.password.errors %}
+              <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
+            <!-- Password requirements UI -->
+            <div id="password-requirements-container" class="mt-2 small text-muted" aria-live="polite">
+              <div>Password must:</div>
+              <ul class="mb-0" id="password-requirements-list">
+                <li data-req="length">Be at least 8 characters long</li>
+                <li data-req="digit">Contain at least one digit</li>
+                <li data-req="lower">Contain at least one lowercase letter</li>
+                <li data-req="upper">Contain at least one uppercase letter</li>
+              </ul>
+            </div>
           </div>
 
           <div class="mb-3">
             <label for="{{ form.password_repeat.id_for_label }}">{{ form.password_repeat.label }} {% if form.password_repeat.field.required %}<span class="text-danger">*</span>{% endif %}</label>
             {{ form.password_repeat }}
+            {% for error in form.password_repeat.errors %}
+              <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
           </div>
 
           <div class="mb-3">

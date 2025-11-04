@@ -3,6 +3,11 @@
 
 {% block title %}Settings{% endblock %}
 
+{% block extra_js %}
+  {% load static %}
+  <script src="{% static 'accounts/signup.js' %}"></script>
+{% endblock %}
+
 {% block content %}
 <div class="row justify-content-center">
   <div class="col-md-8">
@@ -33,6 +38,9 @@
           <div class="mb-3">
             <label for="id_old_password" class="form-label">{{ pwd_form.old_password.label|default:'Old password'|cut:':' }} <span class="text-danger">*</span></label>
             {{ pwd_form.old_password }}
+            {% for error in pwd_form.old_password.errors %}
+              <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
             {% if pwd_form.old_password.help_text %}
               <div class="form-text">{{ pwd_form.old_password.help_text }}</div>
             {% endif %}
@@ -41,14 +49,30 @@
           <div class="mb-3">
             <label for="id_new_password1" class="form-label">{{ pwd_form.new_password1.label|default:'New password'|cut:':' }} <span class="text-danger">*</span></label>
             {{ pwd_form.new_password1 }}
+            {% for error in pwd_form.new_password1.errors %}
+              <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
             {% if pwd_form.new_password1.help_text %}
               <div class="form-text">{{ pwd_form.new_password1.help_text }}</div>
             {% endif %}
+            <!-- Password requirements UI for settings password change -->
+            <div id="password-requirements-container-settings" class="mt-2 small text-muted" aria-live="polite">
+              <div>Password must:</div>
+              <ul class="mb-0" id="password-requirements-list-settings">
+                <li data-req="length">Be at least 8 characters long</li>
+                <li data-req="digit">Contain at least one digit</li>
+                <li data-req="lower">Contain at least one lowercase letter</li>
+                <li data-req="upper">Contain at least one uppercase letter</li>
+              </ul>
+            </div>
           </div>
 
           <div class="mb-3">
             <label for="id_new_password2" class="form-label">{{ pwd_form.new_password2.label|default:'Confirm new password'|cut:':' }} <span class="text-danger">*</span></label>
             {{ pwd_form.new_password2 }}
+            {% for error in pwd_form.new_password2.errors %}
+              <div class="invalid-feedback d-block">{{ error }}</div>
+            {% endfor %}
             <div class="form-text">Enter the same password as before, for verification.</div>
           </div>
 
