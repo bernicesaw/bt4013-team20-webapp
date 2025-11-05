@@ -49,9 +49,9 @@ INSTALLED_APPS = [
     'dashboard.apps.DashboardConfig', # Main dashboard app
     'skillgraph.apps.SkillgraphConfig', # Skill graph visualization app
     'django.contrib.humanize',  # Humanize app for template filters
-    # 'chatbot.apps.ChatbotConfig', # Chatbot integration app
+    'chatbot.apps.ChatbotConfig', # Chatbot integration app
     # 'chatbot',
-    # 'accounts.apps.AccountsConfig',
+    'accounts.apps.AccountsConfig',
 ]
 
 MIDDLEWARE = [
