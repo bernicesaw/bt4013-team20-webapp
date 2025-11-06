@@ -5,8 +5,8 @@
 
 {% block extra_js %}
   <script>
+    // Pass currency options and prefill data to client-side JavaScript
     window.CURRENCY_OPTIONS = {{ currency_json|safe }};
-    // Prefill data for client-side script
     window.PREFILL_WORK_EXPERIENCES = {{ work_experiences_json|safe }};
     window.PREFILL_SKILLS = {{ skills_json|safe }};
   </script>
@@ -18,13 +18,13 @@
   <div class="col-md-8">
     <div class="card shadow-sm">
       <div class="card-body">
-  <h2 class="card-title text-center">Profile</h2>
-  {# Debug block removed: stored skills/work_experiences JSON hidden from UI #}
-  <form method="post" id="signup-form" class="stack-labels">
+        <h2 class="card-title text-center">Profile</h2>
+        
+        <form method="post" id="signup-form" class="stack-labels">
           {% csrf_token %}
 
           <div class="mb-3">
-            <label for="id_email">Email Address {% if user.email %}{% endif %}<span class="text-danger">*</span></label>
+            <label for="id_email">Email Address <span class="text-danger">*</span></label>
             <input type="email" name="email" id="id_email" value="{{ user.email }}" class="form-control" required>
           </div>
 
@@ -52,18 +52,18 @@
           </div>
 
           <div class="row g-2">
-      <div class="col-md-8 mb-3">
-        <label for="id_median_salary">Monthly Median Salary <span class="text-danger">*</span></label>
-        <input type="number" step="0.01" min="0" name="median_salary" id="id_median_salary" class="form-control" value="{{ profile.median_salary|default_if_none:'' }}" required>
-      </div>
+            <div class="col-md-8 mb-3">
+              <label for="id_median_salary">Monthly Median Salary <span class="text-danger">*</span></label>
+              <input type="number" step="0.01" min="0" name="median_salary" id="id_median_salary" class="form-control" value="{{ profile.median_salary|default_if_none:'' }}" required>
+            </div>
             <div class="col-md-4 mb-3">
-                  <label for="id_currency">Currency <span class="text-danger">*</span></label>
-                  <select name="currency" id="id_currency" class="form-select" required>
-                    <option value="">Select currency</option>
-                  {% for c in currency_list %}
-                    <option value="{{ c }}" {% if profile.currency == c %}selected{% endif %}>{{ c }}</option>
-                  {% endfor %}
-                </select>
+              <label for="id_currency">Currency <span class="text-danger">*</span></label>
+              <select name="currency" id="id_currency" class="form-select" required>
+                <option value="">Select currency</option>
+                {% for c in currency_list %}
+                  <option value="{{ c }}" {% if profile.currency == c %}selected{% endif %}>{{ c }}</option>
+                {% endfor %}
+              </select>
             </div>
           </div>
 

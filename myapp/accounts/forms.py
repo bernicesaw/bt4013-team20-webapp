@@ -1,8 +1,18 @@
+"""
+Django forms for user registration and validation.
+
+This module defines:
+- SignupForm: Complete registration form with validation
+- JOB_TITLE_CHOICES: Authoritative list of job titles
+- SKILLS: Authoritative list of valid skills
+- validate_password_strength: Password strength validator
+"""
+
 from django import forms
 from django.core.exceptions import ValidationError
 from .models import CURRENCY_CHOICES
 
-# Authoritative list of job titles used for datalist suggestions and optional choice lists.
+# Authoritative list of job titles used for datalist suggestions and validation.
 # Extracted from data cleaning of our dataset
 JOB_TITLE_CHOICES = [
     'AI/ML engineer', 'Academic researcher', 'Applied scientist', 'Architect, software or solutions',
@@ -23,6 +33,18 @@ JOB_TITLE_CHOICES = [
 
 
 def validate_password_strength(value):
+    """
+    Validate that a password meets strength requirements.
+    
+    Requirements:
+    - At least 8 characters long
+    - Contains at least one digit
+    - Contains at least one lowercase letter
+    - Contains at least one uppercase letter
+    
+    Raises:
+        ValidationError: If password doesn't meet requirements
+    """
     if len(value) < 8:
         raise ValidationError('Password must be at least 8 characters long.')
     if not any(c.isdigit() for c in value):
@@ -34,23 +56,51 @@ def validate_password_strength(value):
 
 
 class SignupForm(forms.Form):
+    """
+    User registration form with comprehensive validation.
+    
+    Validates email confirmation, password strength, password confirmation,
+    skills against authoritative list, and work experience data.
+    """
     email = forms.EmailField(label='Email Address', widget=forms.EmailInput(attrs={'class': 'form-control'}))
     email_repeat = forms.EmailField(label='Confirm Email Address', widget=forms.EmailInput(attrs={'class': 'form-control'}))
-    password = forms.CharField(widget=forms.PasswordInput(attrs={'class': 'form-control'}), validators=[validate_password_strength], label='Password')
-    password_repeat = forms.CharField(widget=forms.PasswordInput(attrs={'class': 'form-control'}), label='Confirm Password')
+    password = forms.CharField(
+        widget=forms.PasswordInput(attrs={'class': 'form-control'}),
+        validators=[validate_password_strength],
+        label='Password'
+    )
+    password_repeat = forms.CharField(
+        widget=forms.PasswordInput(attrs={'class': 'form-control'}),
+        label='Confirm Password'
+    )
 
-    # free-form job title with client-side suggestions
+    # Free-form job title with client-side suggestions from JOB_TITLE_CHOICES
     job_title = forms.CharField(label='Job Title', required=True)
 
     skills = forms.CharField(required=True, help_text='Comma-separated skills (add up to five)')
 
-    median_salary = forms.DecimalField(max_digits=12, decimal_places=2, label='Monthly Median Salary', widget=forms.NumberInput(attrs={'class': 'form-control'}))
-    years_experience = forms.DecimalField(max_digits=4, decimal_places=1, label='Years of Work Experience', widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1', 'min': '0'}))
-    # prepend a placeholder option for the currency select so the dropdown shows "Select currency"
+    median_salary = forms.DecimalField(
+        max_digits=12,
+        decimal_places=2,
+        label='Monthly Median Salary',
+        widget=forms.NumberInput(attrs={'class': 'form-control'})
+    )
+    years_experience = forms.DecimalField(
+        max_digits=4,
+        decimal_places=1,
+        label='Years of Work Experience',
+        widget=forms.NumberInput(attrs={'class': 'form-control', 'step': '0.1', 'min': '0'})
+    )
+    
+    # Prepend placeholder option for currency select
     CURRENCY_CHOICES_WITH_PLACEHOLDER = [('', 'Select currency')] + CURRENCY_CHOICES
-    currency = forms.ChoiceField(choices=CURRENCY_CHOICES_WITH_PLACEHOLDER, label='Currency', widget=forms.Select(attrs={'class': 'form-select'}))
+    currency = forms.ChoiceField(
+        choices=CURRENCY_CHOICES_WITH_PLACEHOLDER,
+        label='Currency',
+        widget=forms.Select(attrs={'class': 'form-select'})
+    )
 
-    # We'll accept working experience as JSON string from the client
+    # Work experiences accepted as JSON string from client-side JavaScript
     work_experiences = forms.CharField(required=False, help_text='JSON array of experiences')
 
     # Optional notifications opt-in on signup
@@ -86,6 +136,7 @@ class SignupForm(forms.Form):
     ]
 
     def clean_email_repeat(self):
+        """Validate that email and email_repeat match."""
         a = self.cleaned_data.get('email')
         b = self.cleaned_data.get('email_repeat')
         if a != b:
@@ -93,6 +144,7 @@ class SignupForm(forms.Form):
         return b
 
     def clean_password_repeat(self):
+        """Validate that password and password_repeat match."""
         a = self.cleaned_data.get('password')
         b = self.cleaned_data.get('password_repeat')
         if a != b:
@@ -100,17 +152,35 @@ class SignupForm(forms.Form):
         return b
 
     def clean_skills(self):
+        """
+        Validate skills field.
+        
+        - Parses comma-separated string into list
+        - Ensures max 5 skills
+        - Validates each skill against authoritative SKILLS list
+        """
         raw = self.cleaned_data.get('skills') or ''
         skills = [s.strip() for s in raw.split(',') if s.strip()]
         if len(skills) > 5:
             raise ValidationError("You may select at most 5 skills.")
-        # ensure each skill is in our authoritative SKILLS list
+        # Ensure each skill is in our authoritative SKILLS list
         unknown = [s for s in skills if s not in getattr(self, 'SKILLS', [])]
         if unknown:
             raise ValidationError(f"Unknown skills: {', '.join(unknown)}. Please choose from the allowed options.")
         return skills
 
     def clean_work_experiences(self):
+        """
+        Validate work_experiences JSON field.
+        
+        Validates:
+        - Valid JSON format
+        - Is a list (not dict or other type)
+        - Max 10 entries
+        - Each entry has required fields (job_title, median_salary, skills)
+        - Each entry's skills are valid and max 5 per entry
+        - Skills are from authoritative list
+        """
         import json
         raw = self.cleaned_data.get('work_experiences') or '[]'
         try:
@@ -121,20 +191,25 @@ class SignupForm(forms.Form):
             raise ValidationError("work_experiences must be a list.")
         if len(arr) > 10:
             raise ValidationError("Too many work experience entries.")
+        
+        # Validate each work experience entry
         for idx, exp in enumerate(arr):
             skills = exp.get('skills', [])
             if len(skills) > 5:
                 raise ValidationError(f"Work experience #{idx+1} has more than 5 skills.")
-            # validate each skill in experience against authoritative list
+            
+            # Validate each skill against authoritative list
             unknown_exp = [s for s in skills if s not in getattr(self, 'SKILLS', [])]
             if unknown_exp:
                 raise ValidationError(f"Work experience #{idx+1} contains unknown skills: {', '.join(unknown_exp)}.")
-            # ensure required fields in each experience are present
+            
+            # Ensure required fields are present
             if not exp.get('job_title'):
                 raise ValidationError(f"Work experience #{idx+1} missing job_title.")
             if exp.get('median_salary') in (None, ''):
                 raise ValidationError(f"Work experience #{idx+1} missing median_salary.")
-            # ensure median_salary is numeric and non-negative
+            
+            # Validate median_salary is numeric and non-negative
             val = exp.get('median_salary')
             try:
                 num = float(val)
@@ -142,6 +217,8 @@ class SignupForm(forms.Form):
                 raise ValidationError(f"Work experience #{idx+1} has an invalid median_salary. Please enter a number.")
             if num < 0:
                 raise ValidationError(f"Work experience #{idx+1} has a negative median_salary. Please enter a non-negative number.")
+            
             if not exp.get('skills'):
                 raise ValidationError(f"Work experience #{idx+1} missing skills.")
+        
         return arr

@@ -1,6 +1,21 @@
+"""
+URL routing configuration for the accounts app.
+
+Defines all URL patterns for authentication and profile management:
+- Signup and signup success
+- Login and logout
+- Profile viewing and editing
+- Settings management
+"""
 from django.urls import path
-from .views import signup_view, SimpleLoginView, logout_view
-from .views import signup_success_view, profile_view, settings_view
+from .views import (
+    signup_view,
+    SimpleLoginView,
+    logout_view,
+    signup_success_view,
+    profile_view,
+    settings_view
+)
 
 app_name = 'accounts'
 
