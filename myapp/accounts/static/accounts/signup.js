@@ -67,6 +67,13 @@ function setupPasswordValidation(opts) {
   const confirm = opts.confirmId ? document.getElementById(opts.confirmId) : null;
   const form = opts.form || (input && input.closest('form')) || null;
 
+  // If there's no password input on this page/form, do not attach any password
+  // validation handlers. This avoids blocking non-signup forms (e.g. Profile)
+  // that reuse the same form id but don't include password fields.
+  if (!input) {
+    return;
+  }
+
   function runCheck() {
     const pwd = input && input.value ? input.value : '';
     const result = checkPasswordStrength(pwd);

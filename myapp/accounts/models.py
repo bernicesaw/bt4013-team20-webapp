@@ -1,3 +1,12 @@
+"""
+Django models for user profiles and work experiences.
+
+This module defines:
+- Profile: Extended user information (job title, skills, salary, etc.)
+- WorkExperience: Historical work experience entries linked to a profile
+- CURRENCY_CHOICES: List of supported currency codes
+"""
+
 from django.db import models
 from django.contrib.auth.models import User
 
@@ -30,14 +39,21 @@ CURRENCY_CHOICES = [
 
 
 class Profile(models.Model):
+    """
+    Extended user profile information.
+    
+    One-to-one relationship with Django's User model. Stores career-related
+    information such as job title, skills, salary, and notification preferences.
+    """
     user = models.OneToOneField(User, on_delete=models.CASCADE)
     job_title = models.CharField(max_length=200)
-    skills = models.JSONField(default=list)  # list of skill strings, max 5 enforced in form
+    # JSONField stores a list of skill strings (max 5 enforced in forms)
+    skills = models.JSONField(default=list)
     median_salary = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     currency = models.CharField(max_length=32, choices=CURRENCY_CHOICES, default='USD')
     # Whether the user has opted in to receive notifications from the app
     notifications_enabled = models.BooleanField(default=False)
-    # Total years of professional experience (allow decimals, e.g. 0.5)
+    # Total years of professional experience (allows decimals, e.g. 0.5 for 6 months)
     years_experience = models.DecimalField(max_digits=4, decimal_places=1, null=True, blank=True)
 
     def __str__(self):
@@ -45,11 +61,19 @@ class Profile(models.Model):
 
 
 class WorkExperience(models.Model):
+    """
+    Historical work experience entries for a user profile.
+    
+    Each profile can have multiple work experiences, each with its own
+    job title, skills, salary, and currency. Ordered by the 'order' field.
+    """
     profile = models.ForeignKey(Profile, related_name='work_experiences', on_delete=models.CASCADE)
     job_title = models.CharField(max_length=200)
+    # JSONField stores a list of skill strings
     skills = models.JSONField(default=list)
     median_salary = models.DecimalField(max_digits=12, decimal_places=2, null=True, blank=True)
     currency = models.CharField(max_length=32, choices=CURRENCY_CHOICES, default='USD')
+    # Order field for sorting multiple experiences
     order = models.PositiveSmallIntegerField(default=0)
 
     class Meta:
