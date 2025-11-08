@@ -24,7 +24,8 @@ def chatbot_view(request):
     """
     return render(request, 'chatbot/chat.html', {
         'page_title': 'Career Chatbot',
-        'user': request.user
+        'user': request.user,
+        'active_nav_item': 'askai',   
     })
 
 
@@ -77,7 +78,7 @@ async def query_chatbot_api(request):
         
         logger.info(f"Query processed in {response_time:.2f}s")
         
-        # Optional: Save to database
+        # # Optional: Save to database
         # from .models import ChatHistory
         # ChatHistory.objects.create(
         #     user=request.user if request.user.is_authenticated else None,

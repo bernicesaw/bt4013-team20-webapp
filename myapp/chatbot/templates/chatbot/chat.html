@@ -15,7 +15,7 @@
     }
     
     :root {
-        --primary-purple: #5D5FEF;
+        --primary-purple: #4a148c;
         --light-purple: #E8E0F5;
         --user-message-bg: #E2E2FC;
         --bot-message-bg: #f5f5f5;
@@ -382,10 +382,17 @@
             
             <div class="example-questions">
                 <button class="example-question" onclick="sendExampleQuery(this.innerText)">
-                    Which jobs use Python as a top language?
+                    Which jobs use Python?
                 </button>
                 <button class="example-question" onclick="sendExampleQuery(this.innerText)">
-                    Show me 3 courses to learn Convolutional Neural Networks
+                    Show me 3 courses to learn Python
+                </button>
+            </div>
+            <div class="example-label">EXAMPLE RECOMMENDATION</div>
+            
+            <div class="example-recommendations">
+                <button class="example-question" onclick="sendExampleQuery(this.innerText)">
+                    Generate my career navigation recommendation
                 </button>
             </div>
         </div>
@@ -518,7 +525,7 @@
         }
     }
     
-    async function sendMessage() {
+    async function sendMessage() { 
         const input = document.getElementById('query-input');
         const query = input.value.trim();
         
@@ -586,15 +593,22 @@
                 
                 <div class="example-questions">
                     <button class="example-question" onclick="sendExampleQuery(this.innerText)">
-                        Which jobs use Python as a top language?
+                        Which jobs use Python?
                     </button>
                     <button class="example-question" onclick="sendExampleQuery(this.innerText)">
-                        Show me 3 courses to learn Convolutional Neural Networks
+                        Show me 3 courses to learn Python
+                    </button>
+                </div>
+                <div class="example-label">EXAMPLE RECOMMENDATION</div>
+            
+                <div class="example-recommendations">
+                    <button class="example-question" onclick="sendExampleQuery(this.innerText)">
+                        Generate my career navigation recommendation
                     </button>
                 </div>
             </div>
         `;
-    }
+    } 
     
     document.getElementById('query-input').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
