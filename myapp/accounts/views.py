@@ -259,8 +259,8 @@ def profile_view(request):
         skills = [s.strip() for s in (skills_raw or '').split(',') if s.strip()]
         if not skills:
             errors.append('At least one skill is required.')
-        if len(skills) > 5:
-            errors.append('At most 5 skills allowed.')
+        if len(skills) > 10:
+            errors.append('At most 10 skills allowed.')
         
         # Validate skills against authoritative list
         try:

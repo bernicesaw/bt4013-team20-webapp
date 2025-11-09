@@ -177,9 +177,9 @@ function initSignupForm() {
   try {
     if (window && window.PREFILL_SKILLS) {
       // PREFILL_SKILLS is expected to be an array
-      try { skills = (window.PREFILL_SKILLS || []).slice(0,5); } catch(e) { /* noop */ }
+      try { skills = (window.PREFILL_SKILLS || []).slice(0,10); } catch(e) { /* noop */ }
     } else if (skillsHidden && skillsHidden.value) {
-      skills = (skillsHidden.value || '').split(',').map(s => s.trim()).filter(Boolean).slice(0,5);
+      skills = (skillsHidden.value || '').split(',').map(s => s.trim()).filter(Boolean).slice(0,10);
     }
   } catch (e) { skills = []; }
   renderSkills();
@@ -220,8 +220,8 @@ function initSignupForm() {
   function addSkill(val) {
     const v = (val || (skillsInput ? skillsInput.value : '') || '').trim();
     if (!v) return;
-    if (skills.length >= 5) {
-      alert('Max 5 skills allowed');
+    if (skills.length >= 10) {
+      alert('Max 10 skills allowed');
       if (skillsInput) skillsInput.value = '';
       return;
     }
@@ -298,7 +298,7 @@ function initSignupForm() {
     }
 
   expSkillsInput.addEventListener('input', (e)=> renderExpSkillSuggestions(e.target.value));
-    expSkillsInput.addEventListener('keydown', (e)=> { if (e.key === 'Enter') { e.preventDefault(); const v=expSkillsInput.value.trim(); if(v && expSkillsArr.length<5 && !expSkillsArr.includes(v)){ expSkillsArr.push(v); expSkillsInput.value=''; renderExpSkills(); } } });
+    expSkillsInput.addEventListener('keydown', (e)=> { if (e.key === 'Enter') { e.preventDefault(); const v=expSkillsInput.value.trim(); if(v && expSkillsArr.length<10 && !expSkillsArr.includes(v)){ expSkillsArr.push(v); expSkillsInput.value=''; renderExpSkills(); } } });
 
     const salary = document.createElement('input');
   // Use number input so mobile keyboards show numeric by default, but avoid comma formatting
@@ -380,7 +380,7 @@ function initSignupForm() {
       if (prefill.median_salary !== undefined && prefill.median_salary !== null) salary.value = prefill.median_salary;
       if (prefill.currency) currency.value = prefill.currency;
       if (Array.isArray(prefill.skills) && prefill.skills.length) {
-        expSkillsArr = prefill.skills.slice(0,5);
+        expSkillsArr = prefill.skills.slice(0,10);
         renderExpSkills();
       }
       // clear validation state for this prefilling
@@ -424,7 +424,7 @@ function initSignupForm() {
       } else {
         skillsArr = (w.skillsField.value || '').split(',').map(s => s.trim()).filter(Boolean);
       }
-      if (skillsArr.length > 5) skillsArr = skillsArr.slice(0,5);
+      if (skillsArr.length > 10) skillsArr = skillsArr.slice(0,10);
       let salaryRaw = (w.salary.value||'').toString().replace(/,/g, '');
       let salaryNum = salaryRaw ? parseFloat(salaryRaw) : null;
       return {
@@ -478,8 +478,8 @@ function initSignupForm() {
         if (w.expSkillsHidden && w.expSkillsHidden.previousSibling) markFieldError(w.expSkillsHidden.previousSibling, 'Add at least one skill.');
         valid = false;
         if (!firstInvalid && w.expSkillsHidden && w.expSkillsHidden.previousSibling) firstInvalid = w.expSkillsHidden.previousSibling;
-      } else if (skillsArr.length > 5) {
-        if (w.expSkillsHidden && w.expSkillsHidden.previousSibling) markFieldError(w.expSkillsHidden.previousSibling, 'At most 5 skills allowed.');
+      } else if (skillsArr.length > 10) {
+        if (w.expSkillsHidden && w.expSkillsHidden.previousSibling) markFieldError(w.expSkillsHidden.previousSibling, 'At most 10 skills allowed.');
         valid = false;
         if (!firstInvalid && w.expSkillsHidden && w.expSkillsHidden.previousSibling) firstInvalid = w.expSkillsHidden.previousSibling;
       }

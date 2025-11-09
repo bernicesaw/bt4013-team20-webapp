@@ -162,7 +162,7 @@ class SignupForm(forms.Form):
         raw = self.cleaned_data.get('skills') or ''
         skills = [s.strip() for s in raw.split(',') if s.strip()]
         if len(skills) > 5:
-            raise ValidationError("You may select at most 5 skills.")
+            raise ValidationError("You may select at most 10 skills.")
         # Ensure each skill is in our authoritative SKILLS list
         unknown = [s for s in skills if s not in getattr(self, 'SKILLS', [])]
         if unknown:
