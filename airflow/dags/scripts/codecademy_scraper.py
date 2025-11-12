@@ -271,3 +271,63 @@ if __name__ == "__main__":
     ts = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
     out = args.output or f"codecademy_courses_{ts}.csv"
     save_csv(rows, out)
+# --- Add this near the bottom of scripts/codecademy_scraper.py ---
+import asyncio
+from typing import Any, Dict, List
+from urllib.parse import urlparse
+
+# If your scraper already has an async collector like 'scrape_keywords',
+# import it here. Otherwise, replace the call inside the wrapper.
+try:
+    from scripts.codecademy_scraper import scrape_keywords  # adjust if your function name differs
+except Exception:
+    scrape_keywords = None  # we'll raise a clear error if missing
+
+def _derive_course_id(row: Dict[str, Any]) -> str:
+    """Stable ID from URL path if present; else fallback to title."""
+    url = (row.get("url") or "").strip()
+    if url:
+        path = urlparse(url).path.rstrip("/")
+        if path:
+            return f"codecademy:{path}"
+    title = (row.get("title") or "").strip()
+    return f"codecademy:{title.lower().replace(' ', '-')}" if title else f"codecademy:row-{abs(hash(str(row)))%10**10}"
+
+def transform_for_db(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    """Map your raw scraper rows -> DB schema expected by db_supabase_codecademy."""
+    out: List[Dict[str, Any]] = []
+    for r in rows:
+        out.append({
+            "course_id": _derive_course_id(r),
+            "title": r.get("title"),
+            "provider": "Codecademy",
+            "url": r.get("url"),
+            "price": r.get("price") or r.get("pricing"),
+            "duration": r.get("duration"),
+            "level": r.get("level"),
+            "language": r.get("language") or "English",
+            "rating": r.get("rating"),
+            "reviews_count": r.get("rating_count") or r.get("reviews_count"),
+            "last_updated": r.get("last_updated"),
+            "keyword": r.get("keyword"),
+            "description": r.get("description"),
+            "what_you_will_learn": r.get("what_you_will_learn") or r.get("learning_objectives"),
+            "skills": r.get("skills") if isinstance(r.get("skills"), str) else " | ".join(r.get("skills", []) or []),
+            "recommended_experience": r.get("recommended_experience") or r.get("prerequisites"),
+        })
+    return out
+
+def scrape_codecademy_rows_sync(
+    keywords_csv: str,
+    pages: int = 2,
+    concurrency: int = 8,
+    per_keyword_limit: int = 0,
+) -> List[Dict[str, Any]]:
+    """
+    Synchronous wrapper that returns a list[dict] of raw rows.
+    Assumes you have an async 'scrape_keywords' similar to Coursera.
+    """
+    if scrape_keywords is None:
+        raise RuntimeError("Expected 'scrape_keywords' in scripts.codecademy_scraper. Please wire your async collector here.")
+    keywords = [k.strip() for k in keywords_csv.split(",") if k.strip()]
+    return asyncio.run(scrape_keywords(keywords=keywords, pages=pages, concurrency=concurrency, per_keyword_limit=per_keyword_limit))

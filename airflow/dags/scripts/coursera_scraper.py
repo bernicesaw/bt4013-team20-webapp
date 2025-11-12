@@ -5,13 +5,18 @@ import json
 import math
 import random
 import re
+import os
 from datetime import datetime
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
 import httpx
-import pandas as pd
+# import pandas as pd  # not needed anymore since we don't write CSV
 from bs4 import BeautifulSoup
 from tqdm.asyncio import tqdm as tqdm_async
+
+# ===== NEW: DB imports (for Supabase Postgres) =====
+from sqlalchemy import create_engine, text
+from sqlalchemy.engine import Engine
 
 SEARCH_URL = "https://www.coursera.org/search"
 RESULT_PATTERNS = ("/learn/", "/specializations/", "/professional-certificates/")
@@ -266,36 +271,189 @@ async def scrape_keywords(keywords: List[str], pages: int, concurrency: int, per
     return all_rows
 
 def cli():
-    ap = argparse.ArgumentParser(description="Scrape Coursera courses by keyword(s) and export CSV (httpx + bs4).")
+    ap = argparse.ArgumentParser(description="Scrape Coursera courses by keyword(s) and save to Supabase (httpx + bs4).")
     ap.add_argument("--keywords", type=str, required=True, help="Comma-separated keywords, e.g. 'machine learning, data science'")
     ap.add_argument("--pages", type=int, default=5, help="How many search pages per keyword to scan (default: 5)")
     ap.add_argument("--concurrency", type=int, default=16, help="Concurrent detail fetches (default: 16)")
     ap.add_argument("--limit-per-keyword", type=int, default=0, help="Optional cap per keyword (0 = no cap)")
-    ap.add_argument("-o", "--output", type=str, default=None, help="Output CSV filename")
+    # NOTE: no CSV output arg anymore
     return ap.parse_args()
 
-async def main():
+# ======================== NEW: Supabase helpers ============================
+
+TABLE_FQN = "public.coursera_demo"
+
+def _derive_course_id(url: str) -> str:
+    """
+    Best-effort stable ID from URL path (e.g., '/learn/machine-learning' -> 'learn/machine-learning').
+    You can swap to a hash if you prefer.
+    """
+    if not url:
+        return ""
+    u = url.split("coursera.org")[-1].strip("/")  # keep path after domain
+    return u or url.strip("/")
+
+def _get_engine() -> Engine:
+    db_url = os.environ.get("SUPABASE_DB_URL")
+    if not db_url:
+        raise RuntimeError("Missing SUPABASE_DB_URL (e.g., postgresql+psycopg2://USER:PASS@HOST:PORT/DB?sslmode=require)")
+    return create_engine(db_url, pool_pre_ping=True)
+
+DDL_SQL = f"""
+CREATE TABLE IF NOT EXISTS {TABLE_FQN} (
+    course_id TEXT PRIMARY KEY,
+    title TEXT,
+    provider TEXT,
+    url TEXT,
+    price TEXT,
+    duration TEXT,
+    level TEXT,
+    language TEXT,
+    rating NUMERIC,
+    reviews_count INTEGER,
+    last_updated DATE,
+    -- keep your original fields so nothing is lost
+    keyword TEXT,
+    description TEXT,
+    what_you_will_learn TEXT,
+    skills TEXT,
+    recommended_experience TEXT
+);
+"""
+
+UPSERT_SQL = f"""
+INSERT INTO {TABLE_FQN} (
+    course_id, title, provider, url, price, duration, level, language,
+    rating, reviews_count, last_updated,
+    keyword, description, what_you_will_learn, skills, recommended_experience
+) VALUES (
+    :course_id, :title, :provider, :url, :price, :duration, :level, :language,
+    :rating, :reviews_count, :last_updated,
+    :keyword, :description, :what_you_will_learn, :skills, :recommended_experience
+)
+ON CONFLICT (course_id) DO UPDATE SET
+    title = EXCLUDED.title,
+    provider = EXCLUDED.provider,
+    url = EXCLUDED.url,
+    price = EXCLUDED.price,
+    duration = EXCLUDED.duration,
+    level = EXCLUDED.level,
+    language = EXCLUDED.language,
+    rating = EXCLUDED.rating,
+    reviews_count = EXCLUDED.reviews_count,
+    last_updated = EXCLUDED.last_updated,
+    keyword = EXCLUDED.keyword,
+    description = EXCLUDED.description,
+    what_you_will_learn = EXCLUDED.what_you_will_learn,
+    skills = EXCLUDED.skills,
+    recommended_experience = EXCLUDED.recommended_experience;
+"""
+
+def ensure_table_exists():
+    engine = _get_engine()
+    with engine.begin() as conn:
+        conn.execute(text(DDL_SQL))
+
+def _to_num(x: Any) -> Optional[float]:
+    try:
+        if x is None or x == "":
+            return None
+        return float(x)
+    except Exception:
+        return None
+
+def _to_int(x: Any) -> Optional[int]:
+    try:
+        if x is None or x == "":
+            return None
+        return int(str(x).replace(",", "").strip())
+    except Exception:
+        return None
+
+def transform_for_db(rows: List[Dict[str, Any]]) -> List[Dict[str, Any]]:
+    out: List[Dict[str, Any]] = []
+    for r in rows:
+        url = r.get("url", "")
+        out.append({
+            "course_id": _derive_course_id(url),
+            "title": r.get("title") or "",
+            "provider": r.get("partner") or "Coursera",
+            "url": url or "",
+            "price": None,                 # not scraped; leave NULL
+            "duration": r.get("duration") or "",
+            "level": r.get("level") or "",
+            "language": None,              # not scraped; leave NULL
+            "rating": _to_num(r.get("rating")),
+            "reviews_count": _to_int(r.get("rating_count")),
+            "last_updated": None,          # not scraped; leave NULL
+            # preserve your original fields too
+            "keyword": r.get("keyword") or "",
+            "description": r.get("description") or "",
+            "what_you_will_learn": r.get("what_you_will_learn") or "",
+            "skills": r.get("skills") or "",
+            "recommended_experience": r.get("recommended_experience") or ""
+        })
+    return out
+
+def upsert_rows(rows: List[Dict[str, Any]]):
+    if not rows:
+        return
+    engine = _get_engine()
+    CHUNK = 2000
+    with engine.begin() as conn:
+        for i in range(0, len(rows), CHUNK):
+            conn.execute(text(UPSERT_SQL), rows[i:i+CHUNK])
+
+# ======================== NEW: public API for DAGs =========================
+
+def scrape_coursera_rows_sync(
+    keywords_csv: str,
+    pages: int = 5,
+    concurrency: int = 16,
+    per_keyword_limit: int = 0
+) -> List[Dict[str, Any]]:
+    """
+    Synchronous wrapper: returns the raw scraped rows (list of dicts).
+    """
+    keywords = [k.strip() for k in keywords_csv.split(",") if k.strip()]
+    rows = asyncio.run(
+        scrape_keywords(
+            keywords=keywords,
+            pages=pages,
+            concurrency=concurrency,
+            per_keyword_limit=(per_keyword_limit or None)
+        )
+    )
+    return rows
+
+def save_rows_to_supabase(rows: List[Dict[str, Any]]):
+    """
+    Transform rows to the coursera_demo schema and upsert to Supabase.
+    """
+    ensure_table_exists()
+    upsert_rows(transform_for_db(rows))
+
+# ======================== NEW: CLI main (no CSV) ===========================
+
+async def _main_async():
     args = cli()
     keywords = [k.strip() for k in args.keywords.split(",") if k.strip()]
     rows = await scrape_keywords(
         keywords=keywords,
         pages=args.pages,
         concurrency=args.concurrency,
-        per_keyword_limit=args.limit_per_keyword
+        per_keyword_limit=args.limit_per_keyword or None,
     )
     if not rows:
         print("No rows collected. Try increasing --pages or check connectivity.")
         return
+    # save directly to Supabase
+    ensure_table_exists()
+    upsert_rows(transform_for_db(rows))
+    print(f"Upserted {len(rows):,} rows into {TABLE_FQN}.")
 
-    df = pd.DataFrame(rows)
-    df = df[[
-        "keyword","title","partner","level","rating","rating_count","duration",
-        "what_you_will_learn","skills","recommended_experience","description","url"
-    ]]
-    ts = datetime.now().strftime("%Y%m%d_%H%M%S")
-    out = args.output or f"coursera_courses_{ts}.csv"
-    df.to_csv(out, index=False, encoding="utf-8-sig")
-    print(f"Saved {len(df):,} rows to {out}")
+def main():
+    asyncio.run(_main_async())
 
 if __name__ == "__main__":
-    asyncio.run(main())
+    main()
