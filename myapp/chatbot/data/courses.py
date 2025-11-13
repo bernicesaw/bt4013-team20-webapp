@@ -13,17 +13,21 @@ supabase = create_client(url, key)
 # Load embedding model
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
-# Fetch all courses
+# Fetch all courses from the "all_courses" table
 courses = supabase.table("all_courses").select("*").execute().data
 
-# Generate and store embeddings
+# Generate and store embeddings for each course
 for course in courses:
+    # Combine title and description for embedding
     text_to_embed = f"{course['title']} {course['description_full']}"
+    
+    # Generate the embedding (384-dimensional vector)
     embedding = model.encode(text_to_embed).tolist()
 
+    # Insert the course and its embedding into the "course_embeddings" table
     supabase.table("course_embeddings").insert({
         "course_url": course["url"],
         "embedding": embedding
     }).execute()
 
-print("Manually added courses inserted successfully.")
+print("Courses inserted successfully.")

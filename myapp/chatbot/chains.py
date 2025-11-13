@@ -285,7 +285,6 @@ else:
             connection=SUPABASE_CONNECTION_STRING,
             embeddings=embeddings,
             collection_name="course_embeddings",
-            use_jsonb=True,
         )
 
         # --- Define prompt template ---
@@ -293,7 +292,8 @@ else:
 
         Based on the following course information, recommend the most relevant courses to the user.
 
-        IMPORTANT: Each course in the context has a 'course_url' in its metadata. You MUST use the EXACT course_url provided - DO NOT make up or modify URLs.
+        IMPORTANT: Each course in the context has a 'course_url' in its metadata. You MUST 
+        use the EXACT course_url provided - DO NOT make up or modify URLs.
 
         For each recommended course, format your output as:
         - Course title (use the exact title from metadata)
@@ -316,7 +316,6 @@ else:
             prompt=PromptTemplate(input_variables=["question"], template="{question}")
         )
         review_prompt = ChatPromptTemplate.from_messages([system_prompt, human_prompt])
-
 
         # --- Build Course Recommendation RetrievalQA chain ---
         qa_chain = RetrievalQA.from_chain_type(

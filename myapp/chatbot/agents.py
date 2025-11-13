@@ -277,57 +277,71 @@ CRITICAL: Always pass the COMPLETE user query to the tool.
 ])
 
 
+import re
+
 def normalize_job_title_in_query(query: str) -> str:
-    """
-    Normalize the job title in the user query based on the SYNONYMS dictionary.
-    Handles overlapping matches by prioritizing longer job titles.
-    """
-    # Find all matches with their positions
-    matches = []
+    # Create a set of all normalized values to avoid re-normalizing
+    normalized_values = set(SYNONYMS.values())
     
-    for title, normalized_title in SYNONYMS.items():
-        # Find all occurrences of this title in the query
-        pattern = r'\b' + re.escape(title) + r'\b'
-        for match in re.finditer(pattern, query, flags=re.IGNORECASE):
-            matches.append({
-                'start': match.start(),
-                'end': match.end(),
-                'original': match.group(),
-                'normalized': normalized_title,
-                'length': len(title)
-            })
+    # Check if the entire query is already a normalized job title
+    if query.strip() in normalized_values:
+        return query.strip()
     
-    # Sort by start position, then by length (longer first for overlaps)
-    matches.sort(key=lambda x: (x['start'], -x['length']))
+    # Sort synonyms by length (longest first) to prioritize longer matches
+    sorted_synonyms = sorted(SYNONYMS.items(), key=lambda x: len(x[0]), reverse=True)
     
-    # Remove overlapping matches, keeping only the longest one
-    filtered_matches = []
-    for match in matches:
-        # Check if this match overlaps with any already selected match
-        overlaps = False
-        for selected in filtered_matches:
-            if not (match['end'] <= selected['start'] or match['start'] >= selected['end']):
-                # There's an overlap - skip this match
-                overlaps = True
-                break
+    # Track replacements to avoid overlaps
+    replacements = []
+    
+    for title, normalized_title in sorted_synonyms:
+        # Skip if we're trying to normalize to the same thing
+        if title == normalized_title:
+            continue
+            
+        # Escape special regex characters
+        escaped_title = re.escape(title)
         
-        if not overlaps:
-            filtered_matches.append(match)
+        # Use word boundaries that work with special characters
+        pattern = r'(?<![a-zA-Z0-9])' + escaped_title + r'(?![a-zA-Z0-9])'
+        
+        # Find all matches (case-insensitive)
+        for match in re.finditer(pattern, query, flags=re.IGNORECASE):
+            start, end = match.start(), match.end()
+            
+            # Check for overlaps with existing replacements
+            overlap = False
+            for rep_start, rep_end, _ in replacements:
+                if not (end <= rep_start or start >= rep_end):
+                    overlap = True
+                    break
+            
+            if not overlap:
+                # Check that we're not replacing within an already normalized value
+                # by checking if the surrounding context matches a normalized value
+                context_start = max(0, start - 50)
+                context_end = min(len(query), end + 50)
+                context = query[context_start:context_end]
+                
+                # Skip if this match is within a normalized value
+                is_within_normalized = False
+                for norm_value in normalized_values:
+                    if norm_value in context and title in norm_value:
+                        is_within_normalized = True
+                        break
+                
+                if not is_within_normalized:
+                    replacements.append((start, end, normalized_title))
     
-    # Sort by start position (descending) to replace from end to start
-    # This way positions don't shift as we replace
-    filtered_matches.sort(key=lambda x: x['start'], reverse=True)
+    # Sort replacements by position (reverse order to maintain positions)
+    replacements.sort(key=lambda x: x[0], reverse=True)
     
-    # Apply replacements from end to start
+    # Apply replacements
     result = query
-    for match in filtered_matches:
-        result = result[:match['start']] + match['normalized'] + result[match['end']:]
-    
-    # Log if any normalization happened
-    if result != query:
-        print(f"🔄 Normalized query: '{query}' → '{result}'")
+    for start, end, normalized_title in replacements:
+        result = result[:start] + normalized_title + result[end:]
     
     return result
+
 
 
 def graph_chain_wrapper(query: str) -> str:
@@ -350,12 +364,14 @@ def graph_chain_wrapper(query: str) -> str:
 def course_chain_wrapper(query: str) -> str:
     """Wrapper for course recommendations"""
     try:
+        print(f"Received query: {query}")
+        
         result = qa_chain.invoke({"query": query})
         
         # Extract source documents with real URLs
         if isinstance(result, dict) and "source_documents" in result:
             docs = result["source_documents"]
-            
+
             if not docs:
                 return "I couldn't find any relevant courses. Try different keywords."
             
@@ -384,8 +400,7 @@ tools = [
         func=course_chain_wrapper,
         description=(
             "Use for questions about courses, tutorials, learning materials, or certifications. "
-            "Always pass the COMPLETE user query, not just keywords."
-            "ONLY for finding TECHNOLOGY and CAREER courses: programming, data science, cloud, web dev, ML, etc. "
+            "IMPORTANT: Always pass the COMPLETE user query, not just keywords."
             "DO NOT use for non-tech topics like cooking, sports, art, music. "
             "If tool returns 'I don't have courses', DO NOT retry - accept the answer. "
         ),

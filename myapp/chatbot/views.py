@@ -51,6 +51,9 @@ async def query_chatbot_api(request):
         
         text = data.get('text', '').strip()
         session_id = data.get('session_id', 'default')
+
+        logger.info(f"Received data: {data}")
+        logger.info(f"Received query: {text}")
         
         if not text:
             return JsonResponse({
