@@ -348,3 +348,29 @@ class Users(models.Model):
     class Meta:
         managed = False
         db_table = 'users'
+
+# skillgraph/models.py
+from django.contrib.postgres.fields import ArrayField  # add at top with other imports
+
+class CoursesWithEmbeddings(models.Model):
+    course_id = models.TextField(blank=True, null=True)
+    title = models.TextField(blank=True, null=True)
+    provider = models.TextField(blank=True, null=True)
+    url = models.TextField(blank=True, null=True)
+    price = models.TextField(blank=True, null=True)
+    duration = models.TextField(blank=True, null=True)
+    level = models.TextField(blank=True, null=True)
+    language = models.TextField(blank=True, null=True)
+    rating = models.TextField(blank=True, null=True)
+    reviews_count = models.TextField(blank=True, null=True)
+    last_updated = models.TextField(blank=True, null=True)
+    keyword = models.TextField(blank=True, null=True)
+    description = models.TextField(blank=True, null=True)
+    what_you_will_learn = models.TextField(blank=True, null=True)
+    skills = models.TextField(blank=True, null=True)
+    recommended_experience = models.TextField(blank=True, null=True)
+    embeddings = ArrayField(models.FloatField(), blank=True, null=True)  # double precision[]
+
+    class Meta:
+        managed = False
+        db_table = 'courses_with_embeddings'

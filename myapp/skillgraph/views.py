@@ -5,6 +5,69 @@ from django.contrib.auth.decorators import login_required
 from .models import StackoverflowJobs2025, AccountsProfile  # Assuming Users is your accounts_profile model
 from django.db.models import Min, Max
 
+from django.db.models import Q
+import numpy as np
+from sentence_transformers import SentenceTransformer
+
+from .models import CoursesWithEmbeddings  # NEW model import
+
+# --- Helpers for "Top 3 Easiest Transitions" ---
+
+def _norm_set(v):
+    """Normalize skills that may come as JSON, list or CSV string -> lowercase set."""
+    if v is None:
+        return set()
+    if isinstance(v, (list, tuple, set)):
+        return {str(x).strip().lower() for x in v if str(x).strip()}
+    if isinstance(v, str):
+        v = v.strip()
+        if not v:
+            return set()
+        # try JSON-list first
+        try:
+            parsed = json.loads(v)
+            if isinstance(parsed, list):
+                return {str(x).strip().lower() for x in parsed if str(x).strip()}
+        except Exception:
+            pass
+        # fallback: CSV
+        return {s.strip().lower() for s in v.split(",") if s.strip()}
+    return set()
+
+def _user_skill_set_from_profile(profile):
+    """Profile.skills is JSON in your model. Make it a normalized set."""
+    return _norm_set(getattr(profile, "skills", None))
+
+def _job_skill_set(job):
+    """Union skills across your four JSON columns in StackoverflowJobs2025."""
+    s = set()
+    for col in ("top_language", "top_database", "top_platform", "top_framework"):
+        s |= _norm_set(getattr(job, col, None))
+    return s
+
+def _edge_from_user_to_job(user_set, job, source_title):
+    req = _job_skill_set(job)
+    if not req:
+        return None
+    overlap = user_set & req
+    missing = req - user_set
+    if not overlap:      # optional: skip jobs with zero overlap
+        return None
+    title = getattr(job, "job", None) or getattr(job, "job_title", None) or "Unknown"
+    edge = {
+        "source": source_title or "current_role",
+        "target": title,
+        "missing": sorted(missing),
+        "overlap": sorted(overlap),
+        "missing_count": len(missing),
+        "overlap_count": len(overlap),
+    }
+    # Numeric difficulty (lower = easier). Keep tie-breakers consistent with your graph:
+    #   1) fewer missing, 2) more overlap, 3) alphabetical title
+    edge["difficulty"] = edge["missing_count"] + max(0, 50 - edge["overlap_count"]) * 1e-6
+    return edge
+
+
 # --- 1. Jaccard Similarity (Unchanged) ---
 def jaccard_similarity(set_a, set_b):
     """Calculates the Jaccard similarity between two sets."""
@@ -254,17 +317,168 @@ def graph_view(request):
             'transition_weight': weight
         })
     
-    # --- 6. SORT the list ---
-    # (This section is unchanged)
+    # --- 6. SORT the list (unchanged) ---
     recommended_jobs.sort(key=lambda x: x['transition_weight'])
 
-    # --- 7. Set up context ---
-    # (This section is unchanged)
+    # --- NEW: compute Top-3 easiest transitions on the spot (no persistence) ---
+    # Get current user profile & skills
+    profile = AccountsProfile.objects.filter(user_id=request.user.id).first()
+    user_set = _user_skill_set_from_profile(profile) if profile else set()
+    user_role = (getattr(profile, "job_title", None) or "Your Current Role") if profile else "Your Current Role"
+
+    # Pull jobs (ORM hits Supabase because your default DB is SUPABASE_POOLER_URL)
+    jobs_qs = StackoverflowJobs2025.objects.all()
+
+    # Build lightweight edges (no graph drawing; just ranking)
+    edges = []
+    for job in jobs_qs:
+        e = _edge_from_user_to_job(user_set, job, source_title=user_role)
+        if e:
+            edges.append(e)
+
+    if user_role:
+        edges = [e for e in edges if e["target"].casefold() != user_role.casefold()]
+
+    # Sort easiest -> hardest: fewest missing, then more overlap, then title
+    edges.sort(key=lambda e: (e["missing_count"], -e["overlap_count"], e["target"]))
+    top3_edges = edges[:2]
+
+    top_easiest_transitions = [
+        {
+            "title": e["target"],
+            "ease": e["difficulty"],
+            "missing_count": e["missing_count"],
+            "overlap_count": e["overlap_count"],
+            "missing": e["missing"],
+            "overlap": e["overlap"],
+        }
+        for e in top3_edges
+    ]
+
+    # --- NEW: course recommendations per Top-2 job ---
+    course_recommendations = []
+    for e in top3_edges:
+        job_title = e["target"]
+        needed_skills = e["missing"]      # ONLY missing skills for matching
+        overlap_skills = e["overlap"]     # skills the user already has
+        recs = recommend_courses_for_job(job_title, needed_skills, exclude_skills=overlap_skills, k=10)
+
+        course_recommendations.append({
+            "job_title": job_title,
+            "needed_skills": needed_skills,
+            "courses": recs,
+        })
+
+    # include in context
     context = {
         'page_title': 'Skill Adjacency Graph',
         'intro_message': 'Visualize your career transitions.',
-        'active_nav_item': 'skillgraph', 
+        'active_nav_item': 'skillgraph',
         'recommended_jobs': recommended_jobs,
         'graph_data': graph_data,
+        'top_easiest_transitions': top_easiest_transitions,
+        'course_recommendations': course_recommendations,  # <--- NEW
     }
     return render(request, 'skillgraph/graph_view.html', context)
+
+# --- Embedding model cache (SentenceTransformer: all-MiniLM-L6-v2) ---
+_ST_MODEL = None
+def _get_st_model():
+    global _ST_MODEL
+    if _ST_MODEL is None:
+        _ST_MODEL = SentenceTransformer("sentence-transformers/all-MiniLM-L6-v2")
+    return _ST_MODEL
+
+def _keyword_prefilter_q(needed_skills, exclude_skills=None):
+    """Match ONLY missing skills; actively exclude overlap skills."""
+    q = Q()
+    for s in (needed_skills or [])[:12]:    # small cap to avoid huge WHERE
+        s = (s or "").strip()
+        if s:
+            q |= Q(title__icontains=s) | Q(description__icontains=s)
+
+    # negative clauses for overlap skills
+    if exclude_skills:
+        for s in exclude_skills:
+            s = (s or "").strip()
+            if s:
+                q &= ~Q(title__icontains=s) & ~Q(description__icontains=s)
+    return q
+
+
+def _cos_sim(a, b):
+    if a is None or b is None:
+        return -1.0
+    va = np.asarray(a, dtype=np.float32)
+    vb = np.asarray(b, dtype=np.float32)
+    na = np.linalg.norm(va)
+    nb = np.linalg.norm(vb)
+    if na == 0 or nb == 0:
+        return -1.0
+    return float(np.dot(va/na, vb/nb))
+
+def recommend_courses_for_job(job_title: str,
+                              needed_skills: list[str],
+                              exclude_skills: list[str] | None = None,
+                              k: int = 10):
+    # 1) keyword prefilter -> only missing skills; exclude overlaps
+    q = _keyword_prefilter_q(needed_skills, exclude_skills)
+    if q.children:
+        qs = CoursesWithEmbeddings.objects.filter(q)
+    else:
+        qs = CoursesWithEmbeddings.objects.all()
+    print(f"[DEBUG] Courses prefiltered: {qs.count()}")
+
+    rows = list(qs.values("course_id","title","provider","url","description","embeddings")[:30])
+    print(f"[DEBUG] Pulled {len(rows)} rows from Supabase")
+
+    # 2) embed query text (job title + a few MISSING skills only)
+    model = _get_st_model()
+    query_text = job_title if not needed_skills else f"{job_title}: " + ", ".join(needed_skills[:8])
+    qvec = model.encode(query_text).tolist()
+    print(f"[DEBUG] Query text: {query_text}")
+    
+    # 3) cosine sim
+    usable, skipped, mismatched = 0, 0, 0
+    for r in rows:
+        emb = r.get("embeddings")
+        if isinstance(emb, str):
+            try: emb = json.loads(emb)
+            except Exception: emb = None
+        if not isinstance(emb, (list, tuple)): emb = None
+        if emb and len(emb) == len(qvec):
+            r["sim"] = _cos_sim(qvec, emb)
+            usable += 1
+        else:
+            r["sim"] = -1.0
+            if emb is None: skipped += 1
+            else: mismatched += 1
+
+    print(f"[DEBUG] Embedding stats — usable:{usable}, skipped:{skipped}, mismatched:{mismatched}")
+
+    # 3b) safety: drop any course that contains ANY overlap skill text
+    if exclude_skills:
+        excl = {s.lower() for s in exclude_skills if s}
+        def has_overlap_text(r):
+            hay = f"{r.get('title','')} {r.get('description','')}".lower()
+            return any(s in hay for s in excl)
+        rows = [r for r in rows if not has_overlap_text(r)]
+    
+    # 3c) Drop duplicate courses with identical title & description
+    seen_pairs = set()
+    unique_rows = []
+    for r in rows:
+        title = (r.get("title") or "").strip().lower()
+        desc = (r.get("description") or "").strip().lower()
+        pair = (title, desc)
+        if pair not in seen_pairs:
+            seen_pairs.add(pair)
+            unique_rows.append(r)
+    print(f"[DEBUG] Deduped courses: {len(unique_rows)} (removed {len(rows) - len(unique_rows)})")
+
+    rows = unique_rows
+
+    # 4) sort & return
+    rows = [r for r in rows if r["sim"] >= 0]
+    rows.sort(key=lambda r: (-r["sim"], r.get("title") or ""))
+    return rows[:k]
