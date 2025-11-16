@@ -6,8 +6,8 @@ import os
 from scripts.db_supabase import ensure_table_exists, upsert_rows
 from scripts.coursera_scraper import scrape_coursera_rows_sync, transform_for_db
 
-# Use the same var your webapp uses; it's already in container env via docker-compose env_file
-POOLER = os.getenv("SUPABASE_POOLER_URL")  # optional: for log sanity checks
+# Use the same var as webapp uses; it's already in container env via docker-compose env_file
+POOLER = os.getenv("SUPABASE_POOLER_URL")
 
 def _create_table():
     # expose to helper (which now accepts either var)

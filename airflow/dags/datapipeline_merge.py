@@ -131,8 +131,6 @@ def clean_merged_table():
         print(f"📊 Row count: {count_before} → {count_after} (removed {deleted_count} rows)")
         print(f"🔍 Found {null_description_count} rows with NULL/empty description before cleaning")
 
-
-# ---------- Generate embeddings ----------
 # ---------- Generate embeddings ----------
 def generate_embeddings():
     """Generate embeddings for the 'description' column using all-MiniLM-L6-v2"""
