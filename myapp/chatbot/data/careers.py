@@ -12,6 +12,7 @@ file_path = os.path.join(script_dir, 'processed_devtype_skills_salaries_exp.csv'
 
 df = pd.read_csv(file_path)
 
+# find salary differences
 salary_diffs = []
 exp_diffs = []
 for i, row_a in df.iterrows():

@@ -8,13 +8,14 @@
     /* Figma-inspired Chat Design */
     
     html, body {
-        height: 100%;
+        height: 100%;  /* Ensure full page height */
         margin: 0;
         padding: 0;
-        overflow: hidden;
+        overflow: hidden;  /* Prevent scrolling outside chat area */
     }
     
     :root {
+        /* Theme color tokens for consistent styling */
         --primary-purple: #4a148c;
         --light-purple: #E8E0F5;
         --user-message-bg: #E2E2FC;
@@ -32,6 +33,7 @@
         overflow: hidden;
     }
     
+    /* Wrapper for entire chat — centers content + adds drop shadow */
     .chat-wrapper {
         max-width: 1200px;
         margin: 0 auto;
@@ -46,8 +48,8 @@
     
     /* Messages area */
     .chat-messages {
-        flex: 1;
-        overflow-y: auto;
+        flex: 1;  /* Take remaining height */
+        overflow-y: auto;  /* Scroll messages only */
         padding: 40px 40px 30px 40px;
         background: #fafafa;
     }
@@ -60,9 +62,10 @@
     }
     
     .message.user {
-        flex-direction: row-reverse;
+        flex-direction: row-reverse; /* User messages align right */
     }
     
+    /* Avatar circle */
     .message-avatar {
         width: 36px;
         height: 36px;
@@ -76,15 +79,18 @@
         border: 1px solid var(--border-color);
     }
     
+    /* Different avatar bg for user */
     .message.user .message-avatar {
         background: var(--light-purple);
         border: none;
     }
     
+    /* Bot avatar stays white */
     .message.bot .message-avatar {
         background: white;
     }
     
+    /* Bubble styling */
     .message-content {
         max-width: 70%;
         padding: 12px 18px;
@@ -94,19 +100,21 @@
         color: var(--text-dark);
     }
     
+    /* User bubble design */
     .message.user .message-content {
         background: var(--user-message-bg);
         border-bottom-right-radius: 4px;
         color: var(--text-dark);
     }
     
+    /* Bot bubble design */
     .message.bot .message-content {
         background: white;
         border: 1px solid var(--border-color);
         border-bottom-left-radius: 4px;
     }
     
-    /* Links in messages */
+    /* Link styling inside bot responses */
     .message-content a {
         color: #5D5FEF;
         text-decoration: none;
@@ -120,13 +128,15 @@
         border-bottom-color: var(--primary-purple);
     }
     
-    /* Welcome message specific styling - CENTERED VERTICALLY */
+    /* ============================
+       WELCOME SCREEN
+       ============================ */
     .welcome-message {
-        display: flex;
+        display: flex;   /* Center vertically */
         flex-direction: column;
         justify-content: center;
         align-items: center;
-        min-height: 100%;
+        min-height: 100%;  /* Take up full chat area */
         text-align: center;
         padding: 20px;
     }
@@ -155,17 +165,18 @@
         margin-bottom: 16px;
     }
     
+    /* Container holding example questions */
     .example-questions {
         display: flex;
         flex-direction: column;
-        align-items: center;        /* Add this line to center the buttons */
+        align-items: center;        /* Center example buttons */
         gap: 10px;
         max-width: 600px;
         margin: 0 auto;
         width: 100%;
     }
     
-    /* SMALLER EXAMPLE QUESTIONS */
+    /* Example question button styling */
     .example-question {
         padding: 8px 16px;
         background: transparent;
@@ -178,8 +189,8 @@
         font-weight: 500;
         transition: all 0.3s ease;
         width: auto;
-        max-width: 450px;                  /* Add max-width to limit button length */
-        min-width: unset;                  /* Remove min-width constraint */
+        max-width: 450px;                   /* Prevent overly wide buttons */
+        min-width: unset;                  
         white-space: normal;
         overflow: hidden;
         text-overflow: ellipsis;
@@ -193,7 +204,9 @@
         box-shadow: 0 6px 16px rgba(93, 95, 239, 0.15);
     }
     
-    /* Input area */
+    /* ============================
+       INPUT AREA
+       ============================ */
     .chat-input-area {
         padding: 24px 40px;
         background: white;
@@ -207,6 +220,7 @@
         max-width: 100%;
     }
     
+    /* Text input field */
     #query-input {
         flex: 1;
         padding: 14px 20px;
@@ -228,6 +242,7 @@
         color: #999;
     }
     
+    /* Clear chat button */
     .clear-chat-btn {
         padding: 14px 24px;
         background: white;
@@ -246,6 +261,7 @@
         border-color: #ccc;
     }
     
+    /* Send button */
     #send-button {
         padding: 14px 32px;
         background: var(--primary-purple);
@@ -381,6 +397,7 @@
             <div class="example-label">EXAMPLE QUERIES</div>
             
             <div class="example-questions">
+                <!-- Example question buttons trigger sendExampleQuery() -->
                 <button class="example-question" onclick="sendExampleQuery(this.innerText)">
                     What are the skills required to be a data scientist?
                 </button>
@@ -408,9 +425,11 @@
                 placeholder="Ask a question..."
                 autocomplete="off"
             />
+            <!-- Clears all chat messages back to welcome screen -->
             <button class="clear-chat-btn" onclick="clearChat()" title="Clear Chat">
                 🗑️ Clear
             </button>
+            <!-- Send message button -->
             <button id="send-button" onclick="sendMessage()">
                 Send
             </button>
@@ -421,7 +440,9 @@
 
 {% block extra_js %}
 <script>
-    // Get CSRF token
+    /* ================================================
+       CSRF TOKEN RETRIEVAL (Django security requirement)
+       ================================================ */
     function getCookie(name) {
         let cookieValue = null;
         if (document.cookie && document.cookie !== '') {
@@ -440,6 +461,9 @@
     const csrftoken = getCookie('csrftoken');
     const sessionId = 'session_' + Math.random().toString(36).substr(2, 9);
     
+    /* ================================================
+       ADD USER MESSAGE TO CHAT WINDOW
+       ================================================ */
     function addUserMessage(text) {
         // Hide welcome screen if visible
         const welcomeScreen = document.getElementById('welcome-screen');
@@ -447,6 +471,7 @@
             welcomeScreen.style.display = 'none';
         }
         
+        // Create message bubble HTML
         const messagesDiv = document.getElementById('chat-messages');
         const messageDiv = document.createElement('div');
         messageDiv.className = 'message user';
@@ -455,9 +480,12 @@
             <div class="message-content">${escapeHtml(text)}</div>
         `;
         messagesDiv.appendChild(messageDiv);
-        scrollToBottom();
+        scrollToBottom();  // Auto-scroll chat to latest message
     }
     
+    /* ================================================
+       ADD BOT MESSAGE (WITH FORMATTING)
+       ================================================ */
     function addBotMessage(content) {
         // Hide welcome screen if visible
         const welcomeScreen = document.getElementById('welcome-screen');
@@ -480,6 +508,14 @@
         scrollToBottom();
     }
     
+    /* ================================================
+       MARKDOWN FORMATTING FOR BOT RESPONSES
+       Converts:
+       - **bold**
+       - ### headers
+       - lists
+       - markdown links [text](url)
+       ================================================ */
     function formatMarkdownLinks(text) {
         if (!text) return '';
         
@@ -529,6 +565,9 @@
         return result.join('');
     }
     
+    /* ================================================
+       SHOW LOADING ANIMATION
+       ================================================ */
     function addLoadingMessage() {
         // Hide welcome screen if visible
         const welcomeScreen = document.getElementById('welcome-screen');
@@ -554,6 +593,9 @@
         scrollToBottom();
     }
     
+    /* ================================================
+       REMOVE LOADING MESSAGE
+       ================================================ */
     function removeLoadingMessage() {
         const loadingMsg = document.getElementById('loading-message');
         if (loadingMsg) {
@@ -561,33 +603,38 @@
         }
     }
     
+    /* ================================================
+       MAIN SEND MESSAGE FUNCTION
+       Sends query to Django API endpoint
+       ================================================ */
     async function sendMessage() { 
         const input = document.getElementById('query-input');
         const query = input.value.trim();
         
-        if (!query) return;
+        if (!query) return;  // Prevent empty messages
         
         // Disable input
-        input.disabled = true;
+        input.disabled = true;  // Disable input while waiting
         document.getElementById('send-button').disabled = true;
         
         // Add user message
-        addUserMessage(query);
-        input.value = '';
+        addUserMessage(query); // Display user bubble
+        input.value = ''; // Clear input
         
         // Add loading
-        addLoadingMessage();
+        addLoadingMessage(); // Show bot typing animation
         
         try {
+            // POST request to backend
             const response = await fetch('/askai/api/query/', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'X-CSRFToken': csrftoken
+                    'X-CSRFToken': csrftoken  // CSRF token required by Django
                 },
                 body: JSON.stringify({ 
                     text: query,
-                    session_id: sessionId
+                    session_id: sessionId  // Send unique session ID
                 })
             });
             
@@ -596,7 +643,7 @@
             removeLoadingMessage();
             
             if (data.success) {
-                addBotMessage(data.output);
+                addBotMessage(data.output);  // Display bot answer
             } else {
                 addBotMessage(`Sorry, I encountered an error: ${data.error}`);
             }
@@ -613,13 +660,19 @@
         input.focus();
     }
     
+    /* Trigger example buttons to auto-run messages */
     function sendExampleQuery(query) {
         document.getElementById('query-input').value = query;
         sendMessage();
     }
     
+    /* ================================================
+       CLEAR CHAT — Resets UI back to welcome screen
+       ================================================ */
+
     function clearChat() {
         const messagesDiv = document.getElementById('chat-messages');
+        // Reset to original HTML
         messagesDiv.innerHTML = `
             <div class="welcome-message" id="welcome-screen">
                 <h2>Welcome to AskAI</h2>
@@ -647,17 +700,20 @@
         `;
     } 
     
+    /* Allow pressing Enter to send message */
     document.getElementById('query-input').addEventListener('keypress', function(e) {
         if (e.key === 'Enter') {
             sendMessage();
         }
     });
     
+    /* Force chat window to scroll to latest message */
     function scrollToBottom() {
         const messagesDiv = document.getElementById('chat-messages');
         messagesDiv.scrollTop = messagesDiv.scrollHeight;
     }
     
+    /* Escape HTML to avoid XSS */
     function escapeHtml(text) {
         const map = {
             '&': '&amp;',

@@ -1,0 +1,28 @@
+question,answer,contexts,ground_truth,faithfulness,answer_relevancy
+What skills does a Data scientist need?,"""Here are the skills that a Data scientist needs:
+
+1. Language: Python, SQL, Bash/Shell (all shells), HTML/CSS, R
+   Database: PostgreSQL, SQLite, MySQL, Microsoft SQL Server, MongoDB
+   Platform: Docker, Pip, Amazon Web Services (AWS), Microsoft Azure, Google Cloud
+   Framework: FastAPI, Flask, Node.js, React, Django""","['""Here are the skills that a Data scientist needs:\n\n1. Language: Python, SQL, Bash/Shell (all shells), HTML/CSS, R\n   Database: PostgreSQL, SQLite, MySQL, Microsoft SQL Server, MongoDB\n   Platform: Docker, Pip, Amazon Web Services (AWS), Microsoft Azure, Google Cloud\n   Framework: FastAPI, Flask, Node.js, React, Django""']","Skills including PostgreSQL, SQLite, MySQL, Microsoft SQL Server, MongoDB, Python, SQL, Bash/Shell (all shells), HTML/CSS, R, Docker, Pip, Amazon Web Services (AWS), Microsoft Azure, Google Cloud, cFastAPI, Flask, Node.js, React, Django",1.0,0.9999999999996656
+What is the median salary for a Data scientist?,"""Here is the median salary for a Data scientist:
+
+1. $87,011""","['""Here is the median salary for a Data scientist:\n\n1. $87,011""']",87011,1.0,0.9999999999997554
+How many years of experience does a Data or business analyst typically have?,"""Here are the years of experience for Data or business analysts:
+
+1. 8.0""","['""Here are the years of experience for Data or business analysts:\n\n1. 8.0""']",8,1.0,0.9289218713186905
+Jobs that use Angular,"""Here are the jobs that match your query:
+
+1. Architect, software or solutions - $100,000
+2. Product manager - $93,357
+3. DevOps engineer or professional - $91,198
+4. Support engineer or analyst - $68,071
+5. Developer, QA or test - $67,108
+6. Developer, front-end - $63,808
+7. Project manager - $57,087""","['""Here are the jobs that match your query:\n\n1. Architect, software or solutions - $100,000\n2. Product manager - $93,357\n3. DevOps engineer or professional - $91,198\n4. Support engineer or analyst - $68,071\n5. Developer, QA or test - $67,108\n6. Developer, front-end - $63,808\n7. Project manager - $57,087""']","Front-end Developer, QA or Test Developer, Support Engineer or Analyst, DevOps Engineer or Professional, Product Manager, Software or Solutions Architect, Project Manager",1.0,0.3519790515188313
+What jobs pay more than Engineering manager?,"""Here are the jobs that match your query:
+
+1. Financial analyst or engineer - $146,500""","['""Here are the jobs that match your query:\n\n1. Financial analyst or engineer - $146,500""']",Financial analyst or engineer,0.6666666666666666,0.4230375278082689
+Jobs requiring less than 7 years experience,"""Here are the jobs that match your query:
+
+1. Academic researcher - $40,302.5""","['""Here are the jobs that match your query:\n\n1. Academic researcher - $40,302.5""']",Academic researcher,1.0,0.3624245539650512

@@ -1,6 +1,7 @@
 """
 Career RAG Agent for Django
 Uses simple regex-based job title normalization with overlap handling
+This module orchestrates the Career Graph, Vector Search, and Personalized Recommendation tools.
 """
 import os
 import re
@@ -9,19 +10,25 @@ from langchain.agents import AgentExecutor, Tool, create_openai_functions_agent
 from langchain_openai import ChatOpenAI
 from langchain.prompts import ChatPromptTemplate, MessagesPlaceholder
 
+# Load environment variables (model names, API keys, etc.)
 load_dotenv()
 CAREER_AGENT_MODEL = os.getenv("CAREER_AGENT_MODEL")
 
+# Import pre-defined chains (Cypher generator + course retriever)
 from .chains import career_cypher_chain, qa_chain
 
+# Helper functions for fetching user profile + formatting recommendations
 from .recommendation_helper import (
     fetch_user_profile,
     format_recommendation_output
 )
+
+# Import vector store (used inside recommendation formatter)
 from .chains import supabase_vector_store
 
 
 # --- Job title synonyms dictionary ---
+# Used to normalize user queries such as "backend dev" → "Developer, back-end"
 SYNONYMS = {
     # Backend
     "backend dev": "Developer, back-end",
@@ -163,29 +170,31 @@ SYNONYMS = {
 }
 
 # --- User context for personalized recommendations ---
-_current_user_id = None
+_current_user_id = None # Stores the logged-in user ID globally for this module
 
 def set_user_id(user_id: str):
-    """Set the current user's ID for personalized queries"""
+    """Store current user ID so the personalized tool knows who is calling."""
     global _current_user_id
     _current_user_id = user_id
     print(f"👤 User ID set: {user_id}")
 
 def get_user_id() -> str:
-    """Get the current user's ID"""
+    """Return the active user ID (None if user not logged in)."""
     return _current_user_id
 
 def personalized_recommendation_wrapper(query: str) -> str:
     """
-    Generate personalized career recommendations based on user profile
+    Main handler for personalized recommendations.
+    Pulls the user profile → queries Neo4j directly → formats results with courses.
     """
     try:
         user_id = get_user_id()
         
+        # Ensure user is logged in before accessing profile
         if not user_id:
             return "I need you to be logged in to generate personalized recommendations."
         
-        # Fetch user profile from database
+        # Fetch the user's saved profile (job title + skills)
         profile = fetch_user_profile(user_id)
         
         if not profile:
@@ -201,9 +210,10 @@ def personalized_recommendation_wrapper(query: str) -> str:
         print(f"📚 User skills: {user_skills}")
     
         
-        # Query Neo4j DIRECTLY (don't use career_cypher_chain)
+        # Query Neo4j graph directly instead of multi-step LangChain chain
         from .chains import graph
         
+        # pre-defined function that aligns with skill graph recommendation method
         cypher_query = f"""
         MATCH (current:Job {{name: '{user_job}'}})-[r:RELATED_TO]->(related:Job)
         RETURN related.name AS job_name,
@@ -221,24 +231,26 @@ def personalized_recommendation_wrapper(query: str) -> str:
         print(f"🔍 Executing Cypher query...")
         neo4j_results = graph.query(cypher_query)
         
+        # Handle case where user job isn't in the graph
         if not neo4j_results:
             return f"I couldn't find any career recommendations for {user_job}. This might be because the job title isn't in our database."
         
         print(f"✅ Found {len(neo4j_results)} recommendations")
         
-        # Format the output with courses using YOUR custom function
+        # Format the output with courses using our own custom function in the recommendation_helper file
         formatted_output = format_recommendation_output(
             user_job=user_job,
             recommendations=neo4j_results,
             user_skills=user_skills,
-            vector_store=supabase_vector_store
+            vector_store=supabase_vector_store # Pass vector DB for course enrichment
         )
         
         print(f"📝 Formatted output length: {len(formatted_output)} characters")
         
-        return formatted_output
+        return formatted_output # Final personalized recommendation answer to user
         
     except Exception as e:
+        # Catch errors so agent does not crash
         print(f"❌ Error in personalized_recommendation_wrapper: {str(e)}")
         import traceback
         traceback.print_exc()
@@ -280,14 +292,25 @@ CRITICAL: Always pass the COMPLETE user query to the tool.
 import re
 
 def normalize_job_title_in_query(query: str) -> str:
+    """
+    Normalize user-written job titles (slang, abbreviations, fuzzy descriptions)
+    into valid Neo4j job titles.
+
+    Example:
+        "backend dev" → "Developer, back-end"
+        "fs dev" → "Developer, full-stack"
+
+    This ensures the Cypher generator always receives valid job titles.
+    """
+
     # Create a set of all normalized values to avoid re-normalizing
     normalized_values = set(SYNONYMS.values())
     
-    # Check if the entire query is already a normalized job title
+    # If the whole query is exactly a normalized title, return as-is
     if query.strip() in normalized_values:
         return query.strip()
     
-    # Sort synonyms by length (longest first) to prioritize longer matches
+    # Sort keys longest→shortest to avoid partial matches breaking phrases
     sorted_synonyms = sorted(SYNONYMS.items(), key=lambda x: len(x[0]), reverse=True)
     
     # Track replacements to avoid overlaps
@@ -301,14 +324,14 @@ def normalize_job_title_in_query(query: str) -> str:
         # Escape special regex characters
         escaped_title = re.escape(title)
         
-        # Use word boundaries that work with special characters
+        # Word-boundary logic that works even with dashes/slashes/commas
         pattern = r'(?<![a-zA-Z0-9])' + escaped_title + r'(?![a-zA-Z0-9])'
         
-        # Find all matches (case-insensitive)
+        # Find all occurrences case-insensitively
         for match in re.finditer(pattern, query, flags=re.IGNORECASE):
             start, end = match.start(), match.end()
             
-            # Check for overlaps with existing replacements
+            # Avoid replacing inside already-replaced segments
             overlap = False
             for rep_start, rep_end, _ in replacements:
                 if not (end <= rep_start or start >= rep_end):
@@ -316,8 +339,7 @@ def normalize_job_title_in_query(query: str) -> str:
                     break
             
             if not overlap:
-                # Check that we're not replacing within an already normalized value
-                # by checking if the surrounding context matches a normalized value
+                # Avoid replacing inside an already-normalized job title
                 context_start = max(0, start - 50)
                 context_end = min(len(query), end + 50)
                 context = query[context_start:context_end]
@@ -332,7 +354,7 @@ def normalize_job_title_in_query(query: str) -> str:
                 if not is_within_normalized:
                     replacements.append((start, end, normalized_title))
     
-    # Sort replacements by position (reverse order to maintain positions)
+    # Apply replacements from back-to-front so indices don't shift
     replacements.sort(key=lambda x: x[0], reverse=True)
     
     # Apply replacements
@@ -346,7 +368,9 @@ def normalize_job_title_in_query(query: str) -> str:
 
 def graph_chain_wrapper(query: str) -> str:
     """
-    Simple wrapper: normalize job titles in query, pass to Cypher generation
+    Wrapper for career graph queries:
+    1. Normalize job titles in user query
+    2. Pass normalized query to Cypher chain
     """
     try:
         # Normalize any job titles in the query
@@ -362,20 +386,24 @@ def graph_chain_wrapper(query: str) -> str:
 
 
 def course_chain_wrapper(query: str) -> str:
-    """Wrapper for course recommendations"""
+    """
+    Wrapper for course recommendation:
+    1. Send raw user query to vector retriever chain
+    2. Format response with REAL metadata URLs
+    """
     try:
         print(f"Received query: {query}")
         
         result = qa_chain.invoke({"query": query})
         
-        # Extract source documents with real URLs
+        # If the chain returned retrieved documents, format manually
         if isinstance(result, dict) and "source_documents" in result:
             docs = result["source_documents"]
 
             if not docs:
                 return "I couldn't find any relevant courses. Try different keywords."
             
-            # Format response with REAL URLs from metadata
+            # Build numbered list with clickable URLs
             response = "Here are some recommended courses:\n\n"
             for i, doc in enumerate(docs, 1):
                 title = doc.metadata.get('title', 'Unknown Course')
@@ -384,7 +412,7 @@ def course_chain_wrapper(query: str) -> str:
             
             return response
         
-        # Fallback to original result if no source_documents
+        # Otherwise fallback to chain output
         return result.get("result", str(result))
     
     except Exception as e:
@@ -392,8 +420,7 @@ def course_chain_wrapper(query: str) -> str:
         return f"I encountered an error searching for courses: {str(e)}"
 
 
-# --- Define tools ---
-# --- Define tools ---
+# --- Define all agent tools ---
 tools = [
     Tool(
         name="CourseRecommendations",
@@ -414,7 +441,7 @@ tools = [
             "This tool uses the user's profile (job title and skills) from the database. "
             "Pass the complete query."
         ),
-        return_direct = True,
+        return_direct = True, # Skip agent summary and return tool output directly
     ),
     Tool(
         name="CareerGraph",
@@ -427,14 +454,14 @@ tools = [
     ),
 ]
 
-# --- Initialize model ---
+# --- Initialize the LLM used by the agent ---
 chat_model = ChatOpenAI(
-    model=CAREER_AGENT_MODEL,
-    temperature=0,
+    model=CAREER_AGENT_MODEL, # Model name loaded from .env
+    temperature=0, # Deterministic actions (important for tools)
 )
 
 
-# --- Create agent ---
+# --- Agent prompt: instructs how the agent chooses tools ---
 career_rag_agent = create_openai_functions_agent(
     llm=chat_model,
     prompt=career_agent_prompt,
@@ -442,12 +469,12 @@ career_rag_agent = create_openai_functions_agent(
 )
 
 
-# --- Wrap agent in executor ---
+# --- Wrap agent in executor to enable execution + intermediate_steps ---
 career_rag_agent_executor = AgentExecutor(
     agent=career_rag_agent,
     tools=tools,
-    return_intermediate_steps=True,
-    verbose=True,
+    return_intermediate_steps=True, # Useful for debugging
+    verbose=True, # Logs agent decisions in console
 )
 
 

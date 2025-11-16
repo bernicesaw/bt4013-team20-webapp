@@ -1,0 +1,22 @@
+
+======================================================================
+        CAREER CHATBOT - RAGAS EVALUATION REPORT
+======================================================================
+
+Generated: 2025-11-16 15:44:24
+
+COURSE RECOMMENDATIONS (7 test cases)
+  Context Precision:  0.780
+  Context Recall:     0.857
+  Faithfulness:       0.321
+  Answer Relevancy:   0.733
+
+CAREER GRAPH QUERIES (6 test cases)
+  Faithfulness:       0.944
+  Answer Relevancy:   0.678
+
+OVERALL
+  Avg Faithfulness:     0.633
+  Avg Answer Relevancy: 0.705
+
+======================================================================

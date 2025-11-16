@@ -10,54 +10,64 @@ from langchain_community.embeddings import SentenceTransformerEmbeddings
 import psycopg2
 from accounts.models import Profile 
 
+# Load environment variables for any external dependencies
 load_dotenv()
 
 
 def fetch_user_profile(user_id: int) -> Optional[Dict[str, any]]:
     """
-    Fetch user's job_title and skills from accounts_profile table using Django ORM
+    Fetch user's job_title and skills from accounts_profile table using Django ORM.
     
     Args:
         user_id: The authenticated user's ID (integer)
     
     Returns:
-        {"job_title": "Data or business analyst", "skills": ["Databricks SQL", "Python"]}
+        Example structure:
+            {"job_title": "Data or business analyst", "skills": ["databricks sql", "python"]}
     """
     try:
-        # Use Django ORM instead of raw SQL
+        # Retrieve the profile row linked to the user (if it exists)
         user_profile = Profile.objects.get(user=user_id)
         
-        # Extract job title
+        # Extract job title string from profile
         job_title = user_profile.job_title
         
-        # Extract skills - it's already a JSONField (list)
+        # Extract skills (JSONField expected as a list)
         skills = user_profile.skills
         if not isinstance(skills, list):
             skills = []
         
-        # Clean up skills list
+        # Remove empty entries from the skills list
         skills = [s for s in skills if s]  # Remove empty strings
         
         print(f"✅ Fetched profile: job='{job_title}', skills={skills}")
+
+        # Normalize skills to lowercase for consistent comparisons
         return {
             "job_title": job_title,
             "skills": [s.lower().strip() for s in skills]  # Normalize to lowercase
         }
         
     except Profile.DoesNotExist:
+        # When no profile exists for the given user
         print(f"⚠️ No profile found for user_id: {user_id}")
         return None
             
     except Exception as e:
+        # Catch-all for any unexpected errors
         print(f"❌ Error fetching user profile: {e}")
         return None
     
 
 def find_missing_skills(user_skills: List[str], job_skills_dict: Dict[str, str]) -> List[str]:
-    # Normalize user skills to lowercase for comparison
+    """
+    Compare the user's skills with the skills required by a particular job
+    to determine which skills the user is missing.
+    """
+    # Normalize user's skills for easier comparison
     user_skills_normalized = [skill.lower() for skill in user_skills]
     
-    # Extract all job skills from the dict
+    # Extract skills from all job skill categories (language, database, framework, etc.)
     all_job_skills = []
     for field, skills_str in job_skills_dict.items():
         if skills_str:
@@ -65,10 +75,10 @@ def find_missing_skills(user_skills: List[str], job_skills_dict: Dict[str, str])
             skills_list = [s.strip() for s in skills_str.split(',')]
             all_job_skills.extend(skills_list)
     
-    # Find missing skills (case-insensitive comparison)
+    # Identify skills the user does NOT have (case-insensitive)
     missing = []
     for job_skill in all_job_skills:
-        # Check if this job skill is NOT in user's skills
+        # Check using containment both ways for more flexible matching
         if not any(user_skill in job_skill.lower() or job_skill.lower() in user_skill 
                    for user_skill in user_skills_normalized):
             missing.append(job_skill)
@@ -84,29 +94,7 @@ def find_missing_skills(user_skills: List[str], job_skills_dict: Dict[str, str])
     return missing_unique
 
 
-# use vector search for courses
-# def find_course_for_skill(skill: str, vector_store: PGVector, max_results: int = 1) -> Optional[Dict[str, str]]:
-#     try:
-#         # Search for courses related to this skill
-#         docs = vector_store.similarity_search(
-#             query=f"{skill}",
-#             k=max_results
-#         )
-        
-#         if docs:
-#             doc = docs[0]
-#             return {
-#                 "title": doc.metadata.get('title', f'{skill} Course'),
-#                 "url": doc.metadata.get('course_url', '#')
-#             }
-#         else:
-#             return None
-            
-#     except Exception as e:
-#         print(f"❌ Error finding course for {skill}: {e}")
-#         return None
-
-# Define your skill-to-course mapping
+# Mapping of skills to external course URLs for skill-building recommendations
 SKILL_COURSE_MAPPING = {
     # Programming Languages
     "python": {"title": "Introduction to Python Programming", "url": "https://www.coursera.org/learn/python-programming-intro"},
@@ -119,7 +107,7 @@ SKILL_COURSE_MAPPING = {
     "swift": {"title": "Learn Swift: Introduction", "url": "https://www.codecademy.com/learn/learn-swift-introduction"},
     "html/css": {"title": "Learn HTML: Fundamentals", "url": "https://www.codecademy.com/learn/learn-html-fundamentals"},
     "bash/shell (all shells)": {"title": "Introduction to Bash Shell Scripting", "url": "https://www.coursera.org/projects/introduction-to-bash-shell-scripting?utm_medium=sem&utm_source=gg&utm_campaign=b2c_apac_x_multi_ftcof_career-academy_cx_dr_bau_gg_pmax_gc_sg_all_m_hyb_25-04_x&campaignid=22449465350&adgroupid=&device=c&keyword=&matchtype=&network=x&devicemodel=&creativeid=&assetgroupid=6568546196&targetid=&extensionid=&placement=&gad_source=1&gad_campaignid=22442997015&gbraid=0AAAAADdKX6ZNc5UZe4An4dxRRTjS8O73C&gclid=CjwKCAiA_dDIBhB6EiwAvzc1cAUy6-bOI08tLW3NR2ietPh5nl1X7UDZYQ9fkMurUZh8IqJ24dsIuhoC3zkQAvD_BwE"},
-    "html/css": {"title": "Learn TypeScript", "url": "https://www.codecademy.com/learn/learn-typescript"},
+    "typescript": {"title": "Learn TypeScript", "url": "https://www.codecademy.com/learn/learn-typescript"},
 
 
     # Databases
@@ -172,17 +160,17 @@ SKILL_COURSE_MAPPING = {
 
 def find_course_for_skill(skill: str, vector_store: PGVector = None, max_results: int = 1) -> Optional[Dict[str, str]]:
     """
-    Find a pre-defined course for a given skill.
-    Only does exact matching (case-insensitive).
+    Given a skill name, return a relevant course suggestion.
+    Uses exact case-insensitive match against predefined mapping.
     """
-    # Normalize the skill for matching
+    # Normalize to lowercase
     skill_lower = skill.lower().strip()
     
-    # Try exact match only
+    # Direct match against dictionary mapping
     if skill_lower in SKILL_COURSE_MAPPING:
         return SKILL_COURSE_MAPPING[skill_lower]
     
-    # If no exact match found, return a generic course suggestion
+    # Fallback generic Coursera search URL if specific match not found
     return {
         "title": f"Learn {skill} - Search on Coursera",
         "url": f"https://www.coursera.org/search?query={skill.replace(' ', '%20')}"
@@ -194,14 +182,19 @@ def format_recommendation_output(
     user_skills: List[str],
     vector_store: PGVector = None  # Keep for compatibility but not used
 ) -> str:
+    """
+    Format career recommendations and missing skills into a human-readable message.
+    """
+    # Header describing the user’s role
     output = f"For your job as a **{user_job}**, here are the top 3 recommended career pathways:\n\n"
     
     for i, job_data in enumerate(recommendations, 1):
+        # Extract job information
         job_name = job_data.get('job_name', 'Unknown Job')
         salary = job_data.get('salary', 'N/A')
         experience = job_data.get('experience', 'N/A')
         
-        # Get all skills for this job
+        # Collect associated skills from the recommendation
         job_skills = {
             'language': job_data.get('language', ''),
             'database': job_data.get('database', ''),
@@ -209,76 +202,32 @@ def format_recommendation_output(
             'framework': job_data.get('framework', '')
         }
         
-        # Find missing skills
+        # Determine what skills the user is missing
         missing_skills = find_missing_skills(user_skills, job_skills)
         
-        # Format job header
+        # Display job entry
         output += f"### {i}. {job_name}\n"
+        # Format salary for numeric values
         output += f"- **Salary**: ${salary:,.0f}\n" if isinstance(salary, (int, float)) else f"- **Salary**: {salary}\n"
         output += f"- **Experience**: {experience} years\n\n"
         
+        # Include missing skills and recommended courses
         if missing_skills:
             output += "**Skills to learn:**\n"
             
             # For each missing skill, find a course
             for skill in missing_skills[:5]:  # Limit to 5 missing skills per job
-                course = find_course_for_skill(skill)  # No need to pass vector_store
+                course = find_course_for_skill(skill)  
                 
                 if course:
                     output += f"- {skill}: [{course['title']}]({course['url']})\n"
                 else:
                     output += f"- {skill}: (No course found)\n"
         else:
+            # User already meets the required skills
             output += "**Great news!** You already have all the key skills for this role.\n"
         
+        # Add spacing before next recommendation
         output += "\n"
     
     return output
-
-# vector search version
-# def format_recommendation_output(
-#     user_job: str,
-#     recommendations: List[Dict],
-#     user_skills: List[str],
-#     vector_store: PGVector
-# ) -> str:
-#     output = f"For your job as a **{user_job}**, here are the top 3 recommended career pathways:\n\n"
-    
-#     for i, job_data in enumerate(recommendations, 1):
-#         job_name = job_data.get('job_name', 'Unknown Job')
-#         salary = job_data.get('salary', 'N/A')
-#         experience = job_data.get('experience', 'N/A')
-        
-#         # Get all skills for this job
-#         job_skills = {
-#             'language': job_data.get('language', ''),
-#             'database': job_data.get('database', ''),
-#             'platform': job_data.get('platform', ''),
-#             'framework': job_data.get('framework', '')
-#         }
-        
-#         # Find missing skills
-#         missing_skills = find_missing_skills(user_skills, job_skills)
-        
-#         # Format job header
-#         output += f"### {i}. {job_name}\n"
-#         output += f"- **Salary**: ${salary:,.0f}\n" if isinstance(salary, (int, float)) else f"- **Salary**: {salary}\n"
-#         output += f"- **Experience**: {experience} years\n\n"
-        
-#         if missing_skills:
-#             output += "**Skills to learn:**\n"
-            
-#             # For each missing skill, find a course
-#             for skill in missing_skills[:5]:  # Limit to 5 missing skills per job
-#                 course = find_course_for_skill(skill, vector_store)
-                
-#                 if course:
-#                     output += f"- {skill}: [{course['title']}]({course['url']})\n"
-#                 else:
-#                     output += f"- {skill}: (No course found)\n"
-#         else:
-#             output += "**Great news!** You already have all the key skills for this role.\n"
-        
-#         output += "\n"
-    
-#     return output
