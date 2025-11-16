@@ -421,15 +421,12 @@ def recommend_courses_for_job(job_title: str,
                               needed_skills: list[str],
                               exclude_skills: list[str] | None = None,
                               k: int = 10):
-    # 1) keyword prefilter -> only missing skills; exclude overlaps
-    q = _keyword_prefilter_q(needed_skills, exclude_skills)
-    if q.children:
-        qs = CoursesWithEmbeddings.objects.filter(q)
-    else:
-        qs = CoursesWithEmbeddings.objects.all()
-    print(f"[DEBUG] Courses prefiltered: {qs.count()}")
+    # 1) pull candidate courses (no keyword filter; only global pool)
+    qs = CoursesWithEmbeddings.objects.all()
+    print(f"[DEBUG] Courses total pool: {qs.count()}")
 
-    rows = list(qs.values("course_id","title","provider","url","description","embeddings")[:30])
+    # limit the number of rows for performance if needed
+    rows = list(qs.values("course_id", "title", "provider", "url", "description", "embeddings"))
     print(f"[DEBUG] Pulled {len(rows)} rows from Supabase")
 
     # 2) embed query text (job title + a few MISSING skills only)
@@ -438,33 +435,39 @@ def recommend_courses_for_job(job_title: str,
     qvec = model.encode(query_text).tolist()
     print(f"[DEBUG] Query text: {query_text}")
     
-    # 3) cosine sim
+    # 3) cosine similarity between query and course embeddings
     usable, skipped, mismatched = 0, 0, 0
     for r in rows:
         emb = r.get("embeddings")
         if isinstance(emb, str):
-            try: emb = json.loads(emb)
-            except Exception: emb = None
-        if not isinstance(emb, (list, tuple)): emb = None
+            try:
+                emb = json.loads(emb)
+            except Exception:
+                emb = None
+        if not isinstance(emb, (list, tuple)):
+            emb = None
         if emb and len(emb) == len(qvec):
             r["sim"] = _cos_sim(qvec, emb)
             usable += 1
         else:
             r["sim"] = -1.0
-            if emb is None: skipped += 1
-            else: mismatched += 1
+            if emb is None:
+                skipped += 1
+            else:
+                mismatched += 1
 
     print(f"[DEBUG] Embedding stats — usable:{usable}, skipped:{skipped}, mismatched:{mismatched}")
 
-    # 3b) safety: drop any course that contains ANY overlap skill text
+    # 3b) remove any course that contains ANY overlap skill text (exclude_skills)
     if exclude_skills:
         excl = {s.lower() for s in exclude_skills if s}
         def has_overlap_text(r):
             hay = f"{r.get('title','')} {r.get('description','')}".lower()
             return any(s in hay for s in excl)
         rows = [r for r in rows if not has_overlap_text(r)]
-    
-    # 3c) Drop duplicate courses with identical title & description
+        print(f"[DEBUG] After excluding overlap skills: {len(rows)} rows")
+
+    # 3c) drop duplicate courses with identical title & description
     seen_pairs = set()
     unique_rows = []
     for r in rows:
@@ -478,7 +481,63 @@ def recommend_courses_for_job(job_title: str,
 
     rows = unique_rows
 
-    # 4) sort & return
-    rows = [r for r in rows if r["sim"] >= 0]
-    rows.sort(key=lambda r: (-r["sim"], r.get("title") or ""))
+    # 4) compute lexical score and coverage score based on needed_skills
+    needed_norm = [s.lower().strip() for s in (needed_skills or []) if s and s.strip()]
+    n_needed = len(needed_norm)
+
+    for r in rows:
+        text = f"{r.get('title','')} {r.get('description','')}".lower()
+        if n_needed > 0:
+            hits = sum(1 for tok in needed_norm if tok in text)
+            r["lex_raw"] = float(hits)                     # lexical: count of matched missing skills
+            r["cov_raw"] = float(hits) / n_needed          # coverage: fraction of missing skills covered
+        else:
+            r["lex_raw"] = 0.0
+            r["cov_raw"] = 0.0
+
+    # 5) keep only rows with valid similarity and build arrays for normalization
+    rows = [r for r in rows if r.get("sim", -1.0) >= 0]
+    if not rows:
+        print("[DEBUG] No rows with valid similarity")
+        return []
+
+    sims = np.array([r["sim"] for r in rows], dtype=np.float32)
+    lex_raw = np.array([r["lex_raw"] for r in rows], dtype=np.float32)
+    cov_raw = np.array([r["cov_raw"] for r in rows], dtype=np.float32)
+
+    def _minmax(arr):
+        if arr.size == 0:
+            return arr
+        a_min = float(arr.min())
+        a_max = float(arr.max())
+        if a_max <= a_min:
+            return np.zeros_like(arr, dtype=np.float32)
+        return (arr - a_min) / (a_max - a_min)
+
+    sims_n = _minmax(sims)
+    lex_n = _minmax(lex_raw)
+    cov_n = _minmax(cov_raw)
+
+    # 6) blended score: semantic + lexical + coverage
+    w_sem = 0.6
+    w_lex = 0.25
+    w_cov = 0.15
+    blended = w_sem * sims_n + w_lex * lex_n + w_cov * cov_n
+
+    for i, r in enumerate(rows):
+        r["score_sem"] = float(sims_n[i])
+        r["score_lex"] = float(lex_n[i])
+        r["score_cov"] = float(cov_n[i])
+        r["score"] = float(blended[i])
+
+    # 7) sort by blended score and return top-k
+    rows.sort(
+        key=lambda r: (
+            -r["score"],          # main blended score
+            -r["score_sem"],      # semantic tie-breaker
+            -r["score_lex"],      # lexical tie-breaker
+            -r["score_cov"],      # coverage tie-breaker
+            r.get("title") or ""  # stable alphabetical fallback
+        )
+    )
     return rows[:k]
