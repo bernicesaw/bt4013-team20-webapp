@@ -17,18 +17,24 @@ Run the web app with the following command:
 python manage.py runserver
 ```
 
-# Alternative: Docker Build and Run
+## Alternative: Docker Build and Run
 
 To run the webapp inside Docker:
 
-## 1. Build the image
+1. Build the image
 
+```bash
 docker build -t team20-webapp .
+```
 
-## 2. Run the container
+2. Run the container
 
+```bash
 docker run -p 8000:8000 team20-webapp
+```
 
-## 3. Access the app
+3. Access the app
 
+```bash
 Visit: http://localhost:8000
+```
